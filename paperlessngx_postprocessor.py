@@ -12,9 +12,9 @@ if __name__ == "__main__":
 
     config = Config()
     
-    arg_parser = argparse.ArgumentParser(description="Apply postprocessing to documents in Paperless-NGX",
+    arg_parser = argparse.ArgumentParser(description="Apply postprocessing to documents in Paperless-ngx",
                                          #formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-                                         epilog="See https://github.com/jgillula/paperless-ngx-postprocessor for more information and detailed examples.")
+                                         epilog="See https://github.com/jgillula/paperless-ngx-postprocessor#readme for more information and detailed examples.")
     for option_name in config.options_spec.keys():
         arg_parser.add_argument("--" + option_name.replace("_","-"), **config.options_spec[option_name].argparse_args)
     

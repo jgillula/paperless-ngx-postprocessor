@@ -17,7 +17,7 @@ class Config:
         
         self.options_spec = {"auth_token": Config.OptionSpec(None, {"metavar": "AUTH_TOKEN",
                                                                     "type": str,
-                                                                    "help": "The auth token to access the REST API of Paperless-NGX. If not specified, postprocessor will try to automagically get it from Paperless-NGX's database directly."}),
+                                                                    "help": "The auth token to access the REST API of Paperless-ngx. If not specified, postprocessor will try to automagically get it from Paperless-ngx's database directly."}),
                              "dry_run": Config.OptionSpec(False, {"action": "store_const",
                                                                   "const": True,
                                                                   "help": "Don't actually make any changes, just print what would happen. Forces the verbosity level to be at least INFO. (default: {default})"}),
@@ -38,7 +38,7 @@ class Config:
                                                                                                              "help": "The config directory containing the rules for postprocessing. (default: {default})"}),
                              "paperless_api_url": Config.OptionSpec("http://localhost:8000/api", {"metavar": "API_URL",
                                                                                                   "type": str,
-                                                                                                  "help": "The full URL to access the Paperless-NGX REST API. (default: {default})"}),
+                                                                                                  "help": "The full URL to access the Paperless-ngx REST API. (default: {default})"}),
                              "paperless_src_dir": Config.OptionSpec("/usr/src/paperless/src", {"metavar": "PAPERLESS_SRC_DIR",
                                                                                                "type": str,
                                                                                                "help": "The directory containing the source for the running instance of paperless. If this is set incorrectly, postprocessor will not be able to automagically acquire the AUTH_TOKEN. (default: {default})"}),
