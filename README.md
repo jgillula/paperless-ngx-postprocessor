@@ -5,8 +5,8 @@ paperless-ngx-postprocessor allows you to automatically set titles, ASNs, and cr
 
 ## Features
 
-* Setup rules to match how documents are postprocessed, based on metadata like correspondent, document_type, storage_path, tags, and more
-* For each rule, extract metadata using [Python regular expressions](https://docs.python.org/3/library/re.html#regular-expression-syntax)
+* Setup rulesets to match how documents are postprocessed, based on metadata like correspondent, document_type, storage_path, tags, and more
+* For each ruleset, extract metadata using [Python regular expressions](https://docs.python.org/3/library/re.html#regular-expression-syntax)
 * Use [Jinja templates](https://jinja.palletsprojects.com/en/3.1.x/templates/) to specify new values for archive serial number, title, and created date, using the values from your regular expression
 * Optionally apply a tag to documents that are changed during postprocessing, so you can keep track of which documents have changed
 * Optionally make backups of changes, so you can restore document metadata back to the way it was before postprocessing
@@ -55,19 +55,19 @@ docker-compose exec -u paperless webserver /usr/src/paperless-ngx-postprocessor/
 ### 3. Create an auth token
 Next we'll need create an authentication token in your Paperless-ngx instance. To do this, go to the 'Add token' page in your paperless-ngx admin console, e.g. [http://localhost:8000/admin/authtoken/tokenproxy/add/](http://localhost:8000/admin/authtoken/tokenproxy/add/). Choose which user you want paperless-ngx-postprocessor to run as, and then click "SAVE".
 
-### 4. Create rules to postprocess your documents
+### 4. Create rulesets to postprocess your documents
 
-Last but not least, create rules in the `paperless-postprocessor-ngx/rules.d` folder to start postprocessing your documents.
+Last but not least, create rulesets in the `paperless-postprocessor-ngx/rulesets.d` folder to start postprocessing your documents.
 
 ## How it works
 
-paperless-ngx-postprocessor works by reading rules from the `rules.d` folder, seeing if the contents of the document match any of the rules, extracting values from the document's contents using a regular expression, and then writing new values for the metadata based on the document's preexisting metadata and any values extracted using the regular expression.
+paperless-ngx-postprocessor works by reading rulesets from the `rulesets.d` folder, seeing if the contents of the document match any of the rulesets, extracting values from the document's contents using a regular expression, and then writing new values for the metadata based on the document's preexisting metadata and any values extracted using the regular expression.
 
 ### An example
 
-An example helps illustrate this. Say you have the following rules:
+An example helps illustrate this. Say you have the following ruleset:
 ```yaml
-Some Rule Name:
+Some Ruleset Name:
   match: "{{ correspondent == 'The Bank' and document_type == 'Transfer Confirmation' }}"
   metadata_regex: '(?:From (?P<source>.*?)\n)|(?:through (?P<created_month>\w*?) (?P<created_day>\d{1,2}), (?P<created_year>\d{4}))'
   metadata_postprocessing:
@@ -89,6 +89,7 @@ Finally after all the rules are processed, paperless-ngx-postprocessor will take
 * `asn`
 * `title`
 * `created_year`, `created_month`, and `created_day`
+
 If any of those differ from the values the document's metadata had when we started, then paperless-ngx-postprocessor will push the new values to paperless-ngx, and processing is complete.
 
 ### Some caveats
@@ -97,41 +98,116 @@ In order to make parsing dates easier, paperless-postprocessor-ngx will "normali
 
 Normalization is as follows:
 * `created_day` will be turned into a zero-padded two-digit string (e.g. `09`).
-* `created_month` will be turned into a zero-padded two-digit string (e.g. '04'). If `created_month` is a string and appears to be the name or abbreviation of a month in the current locale (ignoring capitalization) it will be converted to its corresponding number (e.g. 'Apr' or 'april' will be converted to '04').
+* `created_month` will be turned into a zero-padded two-digit string (e.g. `04`). If `created_month` is a string and appears to be the name or abbreviation of a month in the current locale (ignoring capitalization) it will be converted to its corresponding number (e.g. `Apr` or `april` will be converted to `04`).
 * `created_year` has no normalization. If you want to convert a two-digit year to a four-digit year, you can use the special Jinja filter `expand_two_digit_year`, like so: `{{ created_year | expand_two_digit_year }}`. By default this will add the current century, e.g. as of 2022 this will turn `63` into `2063`. If you want to set a different century, just pass it to the filter like so: `{{ created_year | expand_two_digit_year(19) }}` (converting `77` to `1977`).
 
-For all three, if the new value is ever not convertible into an `int`, then it's rejected and the old value is used (either the original `created_day`, or the last good value before the current individual postprocessing rule).
-## How it works
+For all three, if the new value is ever not convertible into an `int`, then it's rejected and the old value is used (either the original value from the document's metadata before any postprocessing, or the last good value before the current individual postprocessing rule).
 
-paperless-ngx-postprocessor runs using the following algorithm:
-1. Read all of the files in the `rules.d` folder in order, alphabetically by name. In each file, read all of the postprocessing rules in the given file, in order.
-1. To postprocess a document, cycle through each of the rules in order. If the document matches the current rule, do the following.
-   1. Get a copy of the document's metadata (let's call it `postprocessing_metadata`)
-   1. Extract values from the document's contents using the `metadata_regex` field, and add it to `postprocessing_metadata`, overwriting existing values
-   1. Cycle through each of the `metadata_postprocessing` fields in order. For each field:
-      1. Evaluate the Jinja template using `postprocessing_metadata`
-      1. Set the new value for the given field in `postprocessing_metadata` to whatever the template evaluated to
-1. After all the rules have been applied, get the `title`, `asn`, and `created_date` from the last version of `postprocessing_metadata`, and if they're different from the document's current values, update them in Paperless-ngx
+### Combining rulesets
 
-Additionally, note that at every stage the `created_day` field is automatically converted to a zero-padded day (e.g. `07`), and `created_month` is converted to a zero-padded month (e.g. `09). If `created_month` is a string that matches the name of a month (e.g. `sep` or `September`), then it is automatically converted to the corresponding number.
+paperless-ngx-postprocessor reads all of the files in the `rulesets.d` folder in order, alphabetically by name. In each file, all of the postprocessing rulesets in the given file are also read in order.
 
-An example helps illustrate this. Say you have the following rules:
+Each ruleset that matches a given document is applied one at a time, and the changes from an earlier ruleset will affect what metadata is available in a later ruleset. Additionally, the individual field rules are applied in order, and the changes in one affect what metadata is available in a later rule in the same ruleset. For a given document, metadata created in an earlier ruleset persists across later rulesets (unless changed).
+
+For example, say you had the following rulesets:
 ```yaml
-Some Rule Name:
-  match: "{{ correspondent == 'The Bank' and document_type == 'Transfer Confirmation' }}"
-  metadata_regex: '(?:From (?P<source>.*?)\n)|(?:through (?P<created_month>\w*?) (?P<created_day>\d{1,2}), (?P<created_year>\d{2}))'
-  metadata_postprocessing:
-    created_year: "{{ created_year | expand_year }}" # This uses the 'expand_year' filter, which will take a two-digit year like 57 and turn it into a four-digit year like 2057
-    source: '{{ source | title }}' # This applies the Jinja2 'title' filter, capitalizing each word
-    title: '{{created_year}}-{{created_month}}-{{created_day}} -- {{correspondent}} -- {{document_type}} (from {{ source }})'
----
-# You can put multiple rules in the same file if you want
-# Note that rules are applied in order, so any changes from this rule will overwrite changes from previous rules
-Some Other Rule Name:
-  # This will always match
+First Ruleset:
   match: True
+  metadata_regex: 'foo is here: (?P<foo>\w+)'
   metadata_postprocessing:
-    title: '{{created_year}}-{{created_month}}-{{created_day}} -- {{correspondent}} -- {{document_type}}'
+    bar: '{{ foo | upper }'
+    foo: "{{ 'it is uppercase' if (foo | upper) == bar else 'it is not uppercase' }"
+    title: '{{ foo }}'
+---
+Second Ruleset:
+  match: True
+  metadata_regex: 'foo is here: (?P<foo>\w+)'
+  metadata_postprocessing:
+    foo: "{{ foo | lower }}"
+    title: "{{ foo }} {{ title }}"
+---
+Third Ruleset
+    match: True
+    metadata_regex: 'foo is here: (?P<foo>\w+)'
+    metadata_postprocessing:
+      title: "uppercase foo is {{ bar }}"
 ```
 
-First, paperless-ngx-postprocessor will see if the document's correspondent is `The Bank` and if its document_type is `Transfer Confirmation`. If so, it will extract four values from the document's contents by applying the first regular expression (as given by the four [named groups](https://docs.python.org/3/library/re.html#regular-expression-syntax:~:text=in%20a%20group.-,(%3FP%3Cname%3E...),-Similar%20to%20regular): `source`, `created_month`, `created_day`, and `created_year`.
+And let's say the contents of the document was a single line:
+```
+foo is here: You_Found_Me
+```
+
+Postprocessing would proceed as follows:
+1. In the `First Ruleset`, we would first extract `foo` with the value `You_Found_Me`. 
+   1. We would then set `bar` to `YOU_FOUND_ME`.
+   2. Then since `bar` is equal to `foo` in all caps, we would set `foo` to `it is uppercase`.
+   3. Finally, we would set `title` to `{{ foo }}`, which has the value `it is uppercase`.
+   4. The title of the document would then be updated in paperless-ngx.
+1. Then in the `Second Ruleset`, we would extract `foo` as before.
+   2. We would then set `foo` to `you_found_me`
+   3. We would then set the `title` to `you_found_me it is uppercase`, since the `title` had been updated by the previous ruleset.
+   4. The title of the document would then be updated in paperless-ngx.
+5. Finally in `Third Ruleset`, we would extract `foo` as before:
+   6. Set `title` to `uppercase foo is {{ bar }}`. Since fields persist across rulesets, and `bar` was set in the `First Ruleset`, title will be set to `uppercase foo is YOU_FOUND_ME`.
+   7. This title will then be used to finally update paperless-ngx.
+
+## Formal ruleset definition
+
+### Ruleset syntax
+
+Each ruleset is a single YAML document defined as follows:
+```yaml
+Ruleset Name:
+  match: MATCH_TEMPLATE
+  metadata_regex: REGEX
+  metadata_postprocessing:
+    METADATA_FIELDNAME_1: METADATA_TEMPLATE_1
+    ...
+    METADATA_FIELDNAME_N: METADATA_TEMPLATE_N
+```
+where
+* `MATCH_TEMPLATE` is a Jinja template. If it evaluates to True, the ruleset will match and postprocessing will continue.
+* `metadata_regex` is optional. If specified,`REGEX` is a Python regular expression. Any named groups in `REGEX` will be saved and their values can be used in the postprocessing rules in this ruleset.
+* `METADATA_FIELDNAME_X` is the name of a metadata field to update, and `METADATA_TEMPLATE_X` is a Jinja template that will be evaluated using the metadata so far. You can have as many metadata fields as you like.
+
+### Available metadata:
+
+The metadata available for matching and postprocessing mostly matches the metadata available in paperless-ngx for filename handling](https://paperless-ngx.readthedocs.io/en/latest/advanced_usage.html#file-name-handling).
+
+The following fields are read-only--i.e. they keep the same value through postprocessing as they had before postprocessing started. (If you try to overwrite them with new values, those values will be ignored.)
+* `correspondent`: The name of the correspondent, or `None`.
+* `document_type`: The name of the document type, or `None`.
+* `tag_list`: A list object containing the names of all tags assigned to the document.
+* `storage_path`: The name of the storage path, or `None`.
+* `added`: The full date (ISO format) the document was added to paperless.
+* `added_year`: Year added only (as a `str`, not an `int`).
+* `added_month`: Month added only, number 01-12 (as a `str`, not an `int`).
+* `added_day`: Day added only, number 01-31 (as a `str`, not an `int`).
+
+The following fields are available for matching, and can be overwritten by values extracted from the regular expression (e.g. by using a named group with the field name) or by postprocessing rules.
+* `asn`: The archive serial number of the document, or `None`.
+* `title`: The title of the document.
+* `created_year`: Year created only (as a `str`, not an `int`).
+* `created_month`: Month created only, number 01-12 (as a `str`, not an `int`).
+* `created_day`: Day created only, number 01-31 (as a `str`, not an `int`).
+
+The following fields are read-only, but will be updated automatically after every step by the values given in the `created_year`, `created_month`, and `created_day` fields.
+* `created`:  The full date (ISO format) the document was created.
+* `created_date`: The date the document was created in `YYYY-MM-DD` format.
+
+## Configuration
+
+paperless-ngx-postprocessor can be configured using the following environment variables. The defaults should work for a typical paperless-ngx deployment done via docker-compose. If you want to change them, just add them to the same `docker-compose.env` file as you use for Paperless-ngx, and they will be passed along from Paperless-ngx to paperless-ngx-postprocessor.
+
+* `PNGX_POSTPROCESSOR_AUTH_TOKEN=<token>`: The auth token to access the REST API of Paperless-ngx. If not specified, postprocessor will try to automagically get it from Paperless-ngx's database directly. (default: `None`)
+* `PNGX_POSTPROCESSOR_DRY_RUN=<bool>`: If set to `True`, paperless-ngx-postprocessor will not actually push any changes to paperless-ngx. (default: `False`)
+* `PNGX_POSTPROCESSOR_BACKUP=<bool or path>`: Backup file to write any changed values to. If no filename is given, one will be automatically generated on the current date and time. If the path is a directory, the automatically generated file will be stored in that directory. (default: `False`)
+* `PNGX_POSTPROCESSOR_POSTPROCESSING_TAG=<tag name>`: A tag to apply if any changes are made during postprocessing. (default: `None`)
+* `PNGX_POSTPROCESSOR_RULESETS_DIR=<directory>`: The config directory containing the rulesets for postprocessing. (default: `/usr/src/paperless-ngx-postprocessor/rulesets.d`)
+* `PNGX_POSTPROCESSOR_PAPERLESS_API_URL=<url>`: The full URL to access the Paperless-ngx REST API. (default: `http://localhost:8000/api`)
+* `PNGX_POSTPROCESSOR_PAPERLESS_SRC_DIR=<directory>`: The directory containing the source for the running instance of paperless-ngx. If this is set incorrectly, postprocessor will not be able to automagically acquire the auth token. (default: `/usr/src/paperless/src`)
+* `PNGX_POSTPROCESSOR_POST_CONSUME_SCRIPT=<full path to script>`: A post-consumption script to run *after* paperless-ngx-postprocessor is done. All of the environment variables and parameters will be as described in [paperless-ngx's documentation](https://paperless-ngx.readthedocs.io/en/latest/advanced_usage.html#hooking-into-the-consumption-process) (except the values will reflect any new values updated during postprocessing).
+
+## Management
+
