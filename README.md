@@ -58,3 +58,38 @@ Next we'll need create an authentication token in your Paperless-ngx instance. T
 ### 4. Create rules to postprocess your documents
 
 Last but not least, create rules in the `paperless-postprocessor-ngx/rules.d` folder to start postprocessing your documents.
+
+## How it works
+
+paperless-ngx-postprocessor runs using the following algorithm:
+1. Read all of the files in the `rules.d` folder in order, alphabetically by name. In each file, read all of the postprocessing rules in the given file, in order.
+1. To postprocess a document, cycle through each of the rules in order. If the document matches the current rule, do the following.
+   1. Get a copy of the document's metadata (let's call it `postprocessing_metadata`)
+   1. Extract values from the document's contents using the `metadata_regex` field, and add it to `postprocessing_metadata`, overwriting existing values
+   1. Cycle through each of the `metadata_postprocessing` fields in order. For each field:
+      1. Evaluate the Jinja template using `postprocessing_metadata`
+      1. Set the new value for the given field in `postprocessing_metadata` to whatever the template evaluated to
+1. After all the rules have been applied, get the `title`, `asn`, and `created_date` from the last version of `postprocessing_metadata`, and if they're different from the document's current values, update them in Paperless-ngx
+
+Additionally, note that at every stage the `created_day` field is automatically converted to a zero-padded day (e.g. `07`), and `created_month` is converted to a zero-padded month (e.g. `09). If `created_month` is a string that matches the name of a month (e.g. `sep` or `September`), then it is automatically converted to the corresponding number.
+
+An example helps illustrate this. Say you have the following rules:
+```yaml
+Some Rule Name:
+  match: "{{ correspondent == 'The Bank' and document_type == 'Transfer Confirmation' }}"
+  metadata_regex: '(?:From (?P<source>.*?)\n)|(?:through (?P<created_month>\w*?) (?P<created_day>\d{1,2}), (?P<created_year>\d{2}))'
+  metadata_postprocessing:
+    created_year: "{{ created_year | expand_year }}" # This uses the 'expand_year' filter, which will take a two-digit year like 57 and turn it into a four-digit year like 2057
+    source: '{{ source | title }}' # This applies the Jinja2 'title' filter, capitalizing each word
+    title: '{{created_year}}-{{created_month}}-{{created_day}} -- {{correspondent}} -- {{document_type}} (from {{ source }})'
+---
+# You can put multiple rules in the same file if you want
+# Note that rules are applied in order, so any changes from this rule will overwrite changes from previous rules
+Some Other Rule Name:
+  # This will always match
+  match: True
+  metadata_postprocessing:
+    title: '{{created_year}}-{{created_month}}-{{created_day}} -- {{correspondent}} -- {{document_type}}'
+```
+
+First, paperless-ngx-postprocessor will see if the document's correspondent is `The Bank` and if its document_type is `Transfer Confirmation`. If so, it will extract four values from the document's contents by applying the first regular expression (as given by the four [named groups](https://docs.python.org/3/library/re.html#regular-expression-syntax:~:text=in%20a%20group.-,(%3FP%3Cname%3E...),-Similar%20to%20regular): `source`, `created_month`, `created_day`, and `created_year`.
