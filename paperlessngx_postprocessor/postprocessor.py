@@ -23,7 +23,7 @@ class DocumentRuleProcessor:
         #self._title_format = spec[self.name].get("title_format")
 
         self._env = jinja2.Environment()
-        self._env.filters["expand_year"] = self._expand_year
+        self._env.filters["expand_two_digit_year"] = self._expand_two_digit_year
 
     def matches(self, metadata):
         if type(self._match) is str:
@@ -53,9 +53,13 @@ class DocumentRuleProcessor:
         except:
             return old_day
     
-    def _expand_year(self, year, prefix=20):
+    def _expand_two_digit_year(self, year, prefix=None):
+        if prefix is None:
+            prefix = datetime.now().year[0:-2]
+        elif type(prefix) is int:
+            prefix = prefix*100
         if int(year) < 100:
-            return f"{int(year)+prefix*100}"
+            return f"{prefix}{int(year)}"
         else:
             return f"{year}"
     

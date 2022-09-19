@@ -1,14 +1,14 @@
-Some Rule Name:
+Some Ruleset Name:
   match: "{{ correspondent == 'The Bank' and document_type == 'Transfer Confirmation' }}"
   metadata_regex: '(?:From (?P<source>.*?)\n)|(?:through (?P<created_month>\w*?) (?P<created_day>\d{1,2}), (?P<created_year>\d{2}))'
   metadata_postprocessing:
-    created_year: "{{ created_year | expand_year }}" # This uses the 'expand_year' filter, which will take a two-digit year like 57 and turn it into a four-digit year like 2057
+    created_year: "{{ created_year | expand_two_digit_year }}" # This uses the 'expand_year' filter, which will take a two-digit year like 57 and turn it into a four-digit year like 2057
     source: '{{ source | title }}' # This applies the Jinja2 'title' filter, capitalizing each word
     title: '{{created_year}}-{{created_month}}-{{created_day}} -- {{correspondent}} -- {{document_type}} (from {{ source }})'
 ---
 # You can put multiple rules in the same file if you want
 # Note that rules are applied in order, so any changes from this rule will overwrite changes from previous rules
-Some Other Rule Name:
+Some Other Ruleset Name:
   # This will always match
   match: True
   metadata_postprocessing:

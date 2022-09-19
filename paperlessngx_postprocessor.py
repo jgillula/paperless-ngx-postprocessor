@@ -50,7 +50,7 @@ if __name__ == "__main__":
                        paperless_src_dir = config["paperless_src_dir"],
                        logger=logging.getLogger())
     postprocessor = Postprocessor(api,
-                                  config["rules_dir"],                                  
+                                  config["rulesets_dir"],                                  
                                   postprocessing_tag = config["postprocessing_tag"],
                                   dry_run = config["dry_run"],
                                   logger=logging.getLogger())
