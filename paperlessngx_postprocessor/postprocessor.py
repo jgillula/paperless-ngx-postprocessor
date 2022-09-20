@@ -141,7 +141,7 @@ class Postprocessor:
 
         self._processors = []
     
-        for filename in self._rules_dir.glob("*"):
+        for filename in sorted(list(self._rules_dir.glob("*"))):
             if filename.is_file():
                 with open(filename, "r") as yaml_file:
                     try:

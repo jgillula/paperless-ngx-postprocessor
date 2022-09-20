@@ -26,7 +26,7 @@ class Config:
                              "backup": Config.OptionSpec(None, {"nargs": '?',
                                                                 "type": str,
                                                                 "const": self._default_backup_name,
-                                                                "help": "Backup file to write any changed values to. If no filename is given, one will be automatically generated on the current date and time. If the path is a directory, the automatically generated file will be stored in that directory. (default: {default})"}),
+                                                                "help": "Backup file to write any changed values to. If no filename is given, one will be automatically generated based on the current date and time. If the path is a directory, the automatically generated file will be stored in that directory. (default: {default})"}),
                              "postprocessing_tag": Config.OptionSpec(None, {"metavar": "TAG",
                                                                             "type": str,
                                                                             "help": "A tag to apply if any changes are made during postprocessing. (default: {default})"}),
