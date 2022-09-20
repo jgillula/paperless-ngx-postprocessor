@@ -5,7 +5,7 @@ paperless-ngx-postprocessor allows you to automatically set titles, ASNs, and cr
 
 ## Features
 
-* Setup rulesets to match how documents are postprocessed, based on metadata like correspondent, document_type, storage_path, tags, and more
+* Setup rulesets to choose which documents are postprocessed and which are ignored, based on metadata like correspondent, document_type, storage_path, tags, and more
 * For each ruleset, extract metadata using [Python regular expressions](https://docs.python.org/3/library/re.html#regular-expression-syntax)
 * Use [Jinja templates](https://jinja.palletsprojects.com/en/3.1.x/templates/) to specify new values for archive serial number, title, and created date, using the values from your regular expression
 * Optionally apply a tag to documents that are changed during postprocessing, so you can keep track of which documents have changed
@@ -15,11 +15,11 @@ paperless-ngx-postprocessor allows you to automatically set titles, ASNs, and cr
 
 ## Getting Started
 
-The following instructions assume your Paperless-ngx instance is running using docker-compose. If you're running some other way, the following instructions should give you a general idea of what to do. If you still can't figure it out. File an issue and I'll write up some documentation. (I just didn't want to write documentation nobody was going to use.)
+The following instructions assume your Paperless-ngx instance is running using docker-compose. If you're running some other way, the following instructions should give you a general idea of what to do. If you still can't figure it out, [file an issue](https://github.com/jgillula/paperless-ngx-postprocessor/issues/new) and I'll write up some documentation. (I just didn't want to write documentation nobody was going to use.)
 
 ### 0. Get the code
 
-First, clone the paperless-ngx-postprocessor repository wherever you would like the code to live:
+First, clone this paperless-ngx-postprocessor repository to the same host machine where your Paperless-ngx docker container is running.
 ```bash
 git clone https://github.com/jgillula/paperless-ngx-postprocessor.git
 ```
@@ -57,7 +57,7 @@ Next we'll need create an authentication token in your Paperless-ngx instance. T
 
 ### 4. Create rulesets to postprocess your documents
 
-Last but not least, create rulesets in the `paperless-postprocessor-ngx/rulesets.d` folder to start postprocessing your documents.
+Last but not least, create rulesets in the `paperless-postprocessor-ngx/rulesets.d` folder to start postprocessing your documents. See below on how to write rulesets.
 
 ## How it works
 
@@ -75,7 +75,7 @@ Some Ruleset Name:
     title: '{{created_year}}-{{created_month}}-{{created_day}} -- {{correspondent}} -- {{document_type}} (from {{ source }})'
 ```
 
-First paperless-ngx-postprocessor will get a local copy of the document's preexisting metadata. For a full list of the preexisting metadata you can use for matching and postprocessing, see FIXME.
+First paperless-ngx-postprocessor will get a local copy of the document's preexisting metadata. For a full list of the preexisting metadata you can use for matching and postprocessing, see [below](#available-metadata).
 
 Next, paperless-ngx-postprocessor will try to see if the document matches by evaluating the Jinja template given in the `match` field, filling in values from our local copy of the document's metadata. In this case, the document's `correspondent` must be `The Bank` and  its `document_type` must be `Transfer Confirmation`. If that's true, the Jinja template will evaluate to `True`, and the document is a match for further postprocessing.
 
@@ -103,6 +103,8 @@ Normalization is as follows:
 
 For all three, if the new value is ever not convertible into an `int`, then it's rejected and the old value is used (either the original value from the document's metadata before any postprocessing, or the last good value before the current individual postprocessing rule).
 
+This normalization and error-checking allows you to extract dates from the document's contents without having to worry about their format or converting month names to numbers. Instead, paperless-ngx-postprocessor does all that for you.
+
 ### Combining rulesets
 
 paperless-ngx-postprocessor reads all of the files in the `rulesets.d` folder in order, alphabetically by name. In each file, all of the postprocessing rulesets in the given file are also read in order.
@@ -113,7 +115,7 @@ For example, say you had the following rulesets:
 ```yaml
 First Ruleset:
   match: True
-  metadata_regex: 'foo is here: (?P<foo>\w+)'
+  metadata_regex: 'foo is here (?P<foo>\w+)'
   metadata_postprocessing:
     bar: '{{ foo | upper }'
     foo: "{{ 'it is uppercase' if (foo | upper) == bar else 'it is not uppercase' }"
@@ -121,35 +123,33 @@ First Ruleset:
 ---
 Second Ruleset:
   match: True
-  metadata_regex: 'foo is here: (?P<foo>\w+)'
+  metadata_regex: 'foo is here (?P<foo>\w+)'
   metadata_postprocessing:
     foo: "{{ foo | lower }}"
     title: "{{ foo }} {{ title }}"
 ---
 Third Ruleset
     match: True
-    metadata_regex: 'foo is here: (?P<foo>\w+)'
+    metadata_regex: 'foo is here (?P<foo>\w+)'
     metadata_postprocessing:
       title: "uppercase foo is {{ bar }}"
 ```
 
 And let's say the contents of the document was a single line:
 ```
-foo is here: You_Found_Me
+foo is here You_found_Me
 ```
 
-Postprocessing would proceed as follows:
-1. In the `First Ruleset`, we would first extract `foo` with the value `You_Found_Me`. 
+Each of the rules will match any and every document (since their `match` field is `True`), so postprocessing would proceed as follows:
+1. In the `First Ruleset`, we would first extract `foo` with the value `You_found_Me`. 
    1. We would then set `bar` to `YOU_FOUND_ME`.
    2. Then since `bar` is equal to `foo` in all caps, we would set `foo` to `it is uppercase`.
    3. Finally, we would set `title` to `{{ foo }}`, which has the value `it is uppercase`.
-   4. The title of the document would then be updated in paperless-ngx.
 1. Then in the `Second Ruleset`, we would extract `foo` as before.
    2. We would then set `foo` to `you_found_me`
    3. We would then set the `title` to `you_found_me it is uppercase`, since the `title` had been updated by the previous ruleset.
-   4. The title of the document would then be updated in paperless-ngx.
 5. Finally in `Third Ruleset`, we would extract `foo` as before:
-   6. Set `title` to `uppercase foo is {{ bar }}`. Since fields persist across rulesets, and `bar` was set in the `First Ruleset`, title will be set to `uppercase foo is YOU_FOUND_ME`.
+   6. Since fields persist across rulesets, and `bar` was set in the `First Ruleset`, title will be set to `uppercase foo is YOU_FOUND_ME`.
    7. This title will then be used to finally update paperless-ngx.
 
 ## Formal ruleset definition
@@ -169,13 +169,14 @@ Ruleset Name:
 where
 * `MATCH_TEMPLATE` is a Jinja template. If it evaluates to True, the ruleset will match and postprocessing will continue.
 * `metadata_regex` is optional. If specified,`REGEX` is a Python regular expression. Any named groups in `REGEX` will be saved and their values can be used in the postprocessing rules in this ruleset.
+* `metadata_postprocessing` is optional. If not specified, then paperless-ngx-postprocessor will update the document's metadata based only on the fields extract from the regular expression.
 * `METADATA_FIELDNAME_X` is the name of a metadata field to update, and `METADATA_TEMPLATE_X` is a Jinja template that will be evaluated using the metadata so far. You can have as many metadata fields as you like.
 
 ### Available metadata:
 
-The metadata available for matching and postprocessing mostly matches the metadata available in paperless-ngx for filename handling](https://paperless-ngx.readthedocs.io/en/latest/advanced_usage.html#file-name-handling).
+The metadata available for matching and postprocessing mostly matches [the metadata available in paperless-ngx for filename handling](https://paperless-ngx.readthedocs.io/en/latest/advanced_usage.html#file-name-handling).
 
-The following fields are read-only--i.e. they keep the same value through postprocessing as they had before postprocessing started. (If you try to overwrite them with new values, those values will be ignored.)
+The following fields are read-only. They keep the same value through postprocessing as they had before postprocessing started. (If you try to overwrite them with new values, those values will be ignored.)
 * `correspondent`: The name of the correspondent, or `None`.
 * `document_type`: The name of the document type, or `None`.
 * `tag_list`: A list object containing the names of all tags assigned to the document.
@@ -202,7 +203,7 @@ paperless-ngx-postprocessor can be configured using the following environment va
 
 * `PNGX_POSTPROCESSOR_AUTH_TOKEN=<token>`: The auth token to access the REST API of Paperless-ngx. If not specified, postprocessor will try to automagically get it from Paperless-ngx's database directly. (default: `None`)
 * `PNGX_POSTPROCESSOR_DRY_RUN=<bool>`: If set to `True`, paperless-ngx-postprocessor will not actually push any changes to paperless-ngx. (default: `False`)
-* `PNGX_POSTPROCESSOR_BACKUP=<bool or path>`: Backup file to write any changed values to. If no filename is given, one will be automatically generated on the current date and time. If the path is a directory, the automatically generated file will be stored in that directory. (default: `False`)
+* `PNGX_POSTPROCESSOR_BACKUP=<bool or path>`: Backup file to write any changed values to. If no filename is given, one will be automatically generated based on the current date and time. If the path is a directory, the automatically generated file will be stored in that directory. (default: `False`)
 * `PNGX_POSTPROCESSOR_POSTPROCESSING_TAG=<tag name>`: A tag to apply if any changes are made during postprocessing. (default: `None`)
 * `PNGX_POSTPROCESSOR_RULESETS_DIR=<directory>`: The config directory containing the rulesets for postprocessing. (default: `/usr/src/paperless-ngx-postprocessor/rulesets.d`)
 * `PNGX_POSTPROCESSOR_PAPERLESS_API_URL=<url>`: The full URL to access the Paperless-ngx REST API. (default: `http://localhost:8000/api`)
@@ -211,3 +212,33 @@ paperless-ngx-postprocessor can be configured using the following environment va
 
 ## Management
 
+In addition to being run as a post-consumption script, paperless-ngx-postprocessor has the ability to be run directly via a command line interface using the `paperlessngx_postprocessor.py` script. In order to run it outside the Paperless-ngx docker container, you'll need to provide the auth token you generated during setup, e.g.:
+
+```bash
+./paperlessngx_postprocessor.py --auth-token THE_AUTH_TOKEN [specific command here]
+```
+
+For example, to apply postprocessing to all documents with `correspondent` `The Bank`, you would do:
+```bash
+./paperlessngx_postprocessor.py --auth-token THE_AUTH_TOKEN correspondent "The Bank"
+```
+
+You can also choose all documents of a particular `document_type` or `storage_path`, all documents with a specific `tag`, or just all documents (using `all`), or a specific document using its `document_id`. Note that you cannot combine selectors on the command line: e.g it's not possible to select all documents that match both a given `document_type` and `tag` simultaneously on the command line.
+
+The command line interface supports all of the same options that you can set via the environment variables listed in the [Configuration section above](#configuration). To see how to specify them, use the command line interface's built-in help:
+```bash
+./paperlessngx_postprocessor.py --help
+```
+
+Finally, the command line interface supports one feature that you can't do as a post-consumption script: restoring backups to undo changes. To restore a backup, do:
+```bash
+./paperlessngx_postprocessor.py --auth-token THE AUTH_TOKEN restore path/to/the/backup/file/to/restore
+```
+
+(If you want to see what the restore will do, you can open up the backup file in a text editor. Inside is just a yaml document with all of the document IDs and what their fields should be restored to.)
+
+## FAQ
+
+### Will this work with paperless or paperless-ng?
+
+Nope.
