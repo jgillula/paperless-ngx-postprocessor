@@ -49,7 +49,7 @@ docker-compose up -d
 
 Still in the directory of your Paperless-ngx instance, run the following command to setup a Python virtual environment inside the docker container:
 ```bash
-docker-compose exec -u paperless webserver /usr/src/paperless-ngx-postprocessor/setup_env.sh
+docker-compose exec -u paperless webserver /usr/src/paperless-ngx-postprocessor/setup_venv.sh
 ```
 
 ### 3. Create an auth token
