@@ -55,7 +55,7 @@ class DocumentRuleProcessor:
     
     def _expand_two_digit_year(self, year, prefix=None):
         if prefix is None:
-            prefix = datetime.now().year[0:-2]
+            prefix = str(datetime.now().year)[0:-2]
         elif type(prefix) is int:
             prefix = prefix*100
         if int(year) < 100:
@@ -113,7 +113,7 @@ class DocumentRuleProcessor:
                     template = self._env.from_string(self._metadata_postprocessing[variable_name])
                     writable_metadata[variable_name] = template.render(**merged_metadata)                    
                     writable_metadata = self._normalize_created_dates(writable_metadata, metadata)
-                    self._logger.debug(f"Updating '{variable_name}' using template {self._metadata_postprocessing[variable_name]}: '{old_value}'->'{writable_metadata[variable_name]}'")
+                    self._logger.debug(f"Updating '{variable_name}' using template {self._metadata_postprocessing[variable_name]} and metadata {merged_metadata}\n: '{old_value}'->'{writable_metadata[variable_name]}'")
                 except Exception as e:
                     self._logger.error(f"Error parsing template {self._metadata_postprocessing[variable_name]} for {variable_name} using metadata {merged_metadata}: {e}")
 
@@ -134,14 +134,14 @@ class Postprocessor:
         self._api = api
         self._rules_dir = Path(rules_dir)
         if postprocessing_tag is not None:
-            self._postprocessing_tag = self._api.get_item_id_by_name("tags", postprocessing_tag)
+            self._postprocessing_tag_id = self._api.get_item_id_by_name("tags", postprocessing_tag)
         else:
             self._postprocessing_tag_id = None
         self._dry_run = dry_run
 
         self._processors = []
     
-        for filename in sorted(list(self._rules_dir.glob("*"))):
+        for filename in sorted(list(self._rules_dir.glob("*.yml"))):
             if filename.is_file():
                 with open(filename, "r") as yaml_file:
                     try:
