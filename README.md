@@ -49,7 +49,7 @@ docker-compose up -d
 
 Still in the directory of your Paperless-ngx instance, run the following command to setup a Python virtual environment inside the docker container:
 ```bash
-docker-compose exec -u paperless webserver /usr/src/paperless-ngx-postprocessor/setup_env.sh
+docker-compose exec -u paperless webserver /usr/src/paperless-ngx-postprocessor/setup_venv.sh
 ```
 
 ### 3. Create an auth token
@@ -61,7 +61,7 @@ Last but not least, create rulesets in the `paperless-postprocessor-ngx/rulesets
 
 ## How it works
 
-paperless-ngx-postprocessor works by reading rulesets from the `rulesets.d` folder, seeing if the contents of the document match any of the rulesets, extracting values from the document's contents using a regular expression, and then writing new values for the metadata based on the document's preexisting metadata and any values extracted using the regular expression.
+paperless-ngx-postprocessor works by reading rulesets from all the `.yml` files in the `rulesets.d` folder, seeing if the contents of the document match any of the rulesets, extracting values from the document's contents using a regular expression, and then writing new values for the metadata based on the document's preexisting metadata and any values extracted using the regular expression.
 
 ### An example
 
