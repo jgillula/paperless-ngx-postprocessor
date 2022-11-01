@@ -5,7 +5,7 @@ import requests
 from pathlib import Path
 
 class PaperlessAPI:
-    def __init__(self, api_url, auth_token = None, paperless_src_dir = None, logger=None):
+    def __init__(self, api_url, auth_token, paperless_src_dir, logger=None):
         self._logger = logger
         if self._logger is None:
             logging.basicConfig(format="[%(asctime)s] [%(levelname)s] [%(module)s] %(message)s", level="CRITICAL")
@@ -22,6 +22,13 @@ class PaperlessAPI:
             logging.debug(f"Auth token {auth_token} acquired")
 
         self._auth_token = auth_token
+
+    def delete_document_by_id(self, document_id):
+        item_type = "documents"
+        item_id = document_id
+        response = requests.delete(f"{self._api_url}/{item_type}/{item_id}/",
+                                   headers = {"Authorization": f"Token {self._auth_token}"})
+        return response.ok
 
     def get_document_metadata_by_id(self, document_id):
         response = requests.get(f"{self._api_url}/documents/{document_id}/metadata/",
@@ -80,22 +87,6 @@ class PaperlessAPI:
     def get_all_documents(self):
         return self._get_list("documents")
 
-    # def get_documents_by_correspondent_name(self, correspondent_name):
-    #     correspondent_id = self.get_item_id_by_name("correspondents", correspondent_name)
-    #     return self._get_list("documents", f"correspondent__id={correspondent_id}")
-
-    # def get_documents_by_document_type_name(self, document_type_name):
-    #     document_type_id = self.get_item_id_by_name("document_types", document_type_name)
-    #     return self._get_list("documents", f"document_type__id={document_type_id}")
-
-    # def get_documents_by_storage_path_name(self, storage_path_name):
-    #     storage_path_id = self.get_item_id_by_name("storage_paths", storage_path_name)
-    #     return self._get_list("documents", f"storage_path__id={storage_path_id}")
-
-    # def get_documents_by_tag_name(self, tag_name):
-    #     tag_id = self.get_item_id_by_name("tags", tag_name)
-    #     return self._get_list("documents", f"tags__id={tag_id}")
-    
     def get_document_by_id(self, document_id):
         return self._get_item_by_id("documents", document_id)
         
@@ -113,9 +104,9 @@ class PaperlessAPI:
 
     def get_metadata_in_filename_format(self, metadata):
         new_metadata = {}
-        new_metadata["correspondent"] = (self.get_correspondent_by_id(metadata["correspondent"]))["name"]
-        new_metadata["document_type"] = (self.get_document_type_by_id(metadata["document_type"]))["name"]
-        new_metadata["storage_path"] = (self.get_storage_path_by_id(metadata["storage_path"]))["name"]
+        new_metadata["correspondent"] = (self.get_correspondent_by_id(metadata["correspondent"])).get("name")
+        new_metadata["document_type"] = (self.get_document_type_by_id(metadata["document_type"])).get("name")
+        new_metadata["storage_path"] = (self.get_storage_path_by_id(metadata["storage_path"])).get("name")
         new_metadata["asn"] = metadata["archive_serial_number"]
         new_metadata["tag_list"] = [self.get_tag_by_id(tag)["name"] for tag in metadata["tags"]]
         new_metadata["title"] = metadata["title"]

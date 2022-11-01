@@ -25,7 +25,6 @@ if __name__ == "__main__":
             config = Config()
             
             logging.getLogger().setLevel(config["verbose"])
-            logging.debug(f"Running post consume script {post_consume_script}")
             
             script_env = os.environ.copy()
             
@@ -35,6 +34,12 @@ if __name__ == "__main__":
                                logger=logging.getLogger())    
             
             script_env.update(api.get_metadata_for_post_consume_script(document_id))
+            for key in script_env:
+                if script_env[key] is None:
+                    script_env[key] = "None"
+
+            logging.info(f"Running post consume script {post_consume_script}")
+            logging.debug(f"Using environment f{script_env}")
 
             subprocess.run((post_consume_script,
                             script_env["DOCUMENT_ID"],

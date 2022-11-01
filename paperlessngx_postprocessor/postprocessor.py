@@ -55,25 +55,28 @@ class DocumentRuleProcessor:
     
     def _expand_two_digit_year(self, year, prefix=None):
         if prefix is None:
-            prefix = datetime.now().year[0:-2]
+            prefix = str(datetime.now().year)[0:-2]
         elif type(prefix) is int:
             prefix = prefix*100
         if int(year) < 100:
-            return f"{prefix}{int(year)}"
+            return f"{prefix}{int(year):02}"
         else:
             return f"{year}"
     
     def _normalize_created_dates(self, new_metadata, old_metadata):
         result = new_metadata.copy()
         #if "created_year" in metadata.keys():
-        result["created_year"] = str(int(new_metadata["created_year"]))
+        try:
+            result["created_year"] = str(int(new_metadata["created_year"]))
+        except:
+            result["created_year"] = old_metadata["created_year"]
         #if "created_month" in metadata.keys():
         result["created_month"] = self._normalize_month(new_metadata["created_month"], old_metadata["created_month"])
         #if "created_day" in metadata.keys():
         result["created_day"] = self._normalize_day(new_metadata["created_day"], old_metadata["created_day"])
 
         original_created_date = dateutil.parser.isoparse(old_metadata["created"])
-        new_created_date = datetime(int(result["created_year"]), int(result["created_month"]), int(result["created_day"]), tzinfo=original_created_date.tzinfo)
+        new_created_date = datetime(int(result["created_year"]), int(result["created_month"]), int(result["created_day"]), 12, tzinfo=original_created_date.tzinfo)
         result["created"] = new_created_date.isoformat()
         result["created_date"] = new_created_date.strftime("%F") # %F means YYYY-MM-DD
         
@@ -97,8 +100,9 @@ class DocumentRuleProcessor:
         if self._metadata_regex is not None:
             match_object = regex.search(self._metadata_regex, content)
             if match_object is not None:
-                #regex_data = match_object.groupdict()
-                writable_metadata.update(match_object.groupdict())
+                regex_data = match_object.groupdict()
+                #writable_metadata.update(match_object.groupdict())
+                writable_metadata.update([(k, regex_data[k]) for k in regex_data if regex_data[k] is not None])
                 writable_metadata = self._normalize_created_dates(writable_metadata, metadata)
                 self._logger.debug(f"Regex results are {writable_metadata}")
             else:
@@ -113,7 +117,7 @@ class DocumentRuleProcessor:
                     template = self._env.from_string(self._metadata_postprocessing[variable_name])
                     writable_metadata[variable_name] = template.render(**merged_metadata)                    
                     writable_metadata = self._normalize_created_dates(writable_metadata, metadata)
-                    self._logger.debug(f"Updating '{variable_name}' using template {self._metadata_postprocessing[variable_name]}: '{old_value}'->'{writable_metadata[variable_name]}'")
+                    self._logger.debug(f"Updating '{variable_name}' using template {self._metadata_postprocessing[variable_name]} and metadata {merged_metadata}\n: '{old_value}'->'{writable_metadata[variable_name]}'")
                 except Exception as e:
                     self._logger.error(f"Error parsing template {self._metadata_postprocessing[variable_name]} for {variable_name} using metadata {merged_metadata}: {e}")
 
@@ -134,14 +138,14 @@ class Postprocessor:
         self._api = api
         self._rules_dir = Path(rules_dir)
         if postprocessing_tag is not None:
-            self._postprocessing_tag = self._api.get_item_id_by_name("tags", postprocessing_tag)
+            self._postprocessing_tag_id = self._api.get_item_id_by_name("tags", postprocessing_tag)
         else:
             self._postprocessing_tag_id = None
         self._dry_run = dry_run
 
         self._processors = []
     
-        for filename in sorted(list(self._rules_dir.glob("*"))):
+        for filename in sorted(list(self._rules_dir.glob("*.yml"))):
             if filename.is_file():
                 with open(filename, "r") as yaml_file:
                     try:
@@ -158,9 +162,11 @@ class Postprocessor:
         
         for processor in self._processors:
             if processor.matches(metadata_in_filename_format):
-                self._logger.debug(f"Processor {processor.name} matches")
+                self._logger.debug(f"Rule {processor.name} matches")
                 new_metadata = processor.get_new_metadata(metadata_in_filename_format, content)
                 metadata_in_filename_format = {**metadata_in_filename_format, **new_metadata}
+            else:
+                self._logger.debug(f"Rule {processor.name} does not match")
 
         return new_metadata
 
@@ -172,7 +178,6 @@ class Postprocessor:
             self._logger.debug(f"metadata_in_filename_format={metadata_in_filename_format}")
             new_metadata_in_filename_format = self._get_new_metadata_in_filename_format(metadata_in_filename_format, document["content"])
             self._logger.debug(f"new_metadata_in_filename_format={new_metadata_in_filename_format}")
-            self._logger.info(f"For document_id={document['id']}:")
             if len([key for key in metadata_in_filename_format.keys() if metadata_in_filename_format[key] != new_metadata_in_filename_format.get(key)]) > 0:
                 new_metadata = self._api.get_metadata_from_filename_format(new_metadata_in_filename_format)
                 # differences should be a list of keys that have changed
@@ -181,6 +186,7 @@ class Postprocessor:
                     new_metadata["tags"].append(self._postprocessing_tag_id)
                     differences = [key for key in new_metadata.keys() if new_metadata[key] != document[key]]
                 if len(differences) > 0:
+                    self._logger.info(f"Changes for document_id={document['id']}:")
                     for key in differences:
                         self._logger.info(f" {key}: '{document[key]}' --> '{new_metadata[key]}'")                        
                     if not self._dry_run:
@@ -190,9 +196,9 @@ class Postprocessor:
                         backup_data["id"] = document["id"]
                         backup_documents.append(backup_data)                        
                 else:
-                    self._logger.info(" No changes")
+                    self._logger.info(f"No changes for document_id={document['id']}")
             else:
-                self._logger.info(" No changes")
+                self._logger.info(f"No changes for document_id={document['id']}")
             
         return backup_documents
         

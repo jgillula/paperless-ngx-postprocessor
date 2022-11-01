@@ -205,9 +205,9 @@ paperless-ngx-postprocessor can be configured using the following environment va
 * `PNGX_POSTPROCESSOR_DRY_RUN=<bool>`: If set to `True`, paperless-ngx-postprocessor will not actually push any changes to paperless-ngx. (default: `False`)
 * `PNGX_POSTPROCESSOR_BACKUP=<bool or path>`: Backup file to write any changed values to. If no filename is given, one will be automatically generated based on the current date and time. If the path is a directory, the automatically generated file will be stored in that directory. (default: `False`)
 * `PNGX_POSTPROCESSOR_POSTPROCESSING_TAG=<tag name>`: A tag to apply if any changes are made during postprocessing. (default: `None`)
-* `PNGX_POSTPROCESSOR_RULESETS_DIR=<directory>`: The config directory containing the rulesets for postprocessing. (default: `/usr/src/paperless-ngx-postprocessor/rulesets.d`)
-* `PNGX_POSTPROCESSOR_PAPERLESS_API_URL=<url>`: The full URL to access the Paperless-ngx REST API. (default: `http://localhost:8000/api`)
-* `PNGX_POSTPROCESSOR_PAPERLESS_SRC_DIR=<directory>`: The directory containing the source for the running instance of paperless-ngx. If this is set incorrectly, postprocessor will not be able to automagically acquire the auth token. (default: `/usr/src/paperless/src`)
+* `PNGX_POSTPROCESSOR_RULESETS_DIR=<directory>`: The config directory (within the Docker container) containing the rulesets for postprocessing. (default: `/usr/src/paperless-ngx-postprocessor/rulesets.d`)
+* `PNGX_POSTPROCESSOR_PAPERLESS_API_URL=<url>`: The full URL to access the Paperless-ngx REST API (within the Docker container). (default: `http://localhost:8000/api`)
+* `PNGX_POSTPROCESSOR_PAPERLESS_SRC_DIR=<directory>`: The directory containing the source for the running instance of paperless-ngx (within the Docker container). If this is set incorrectly, postprocessor will not be able to automagically acquire the auth token. (default: `/usr/src/paperless/src`)
 * `PNGX_POSTPROCESSOR_POST_CONSUME_SCRIPT=<full path to script>`: A post-consumption script to run *after* paperless-ngx-postprocessor is done. All of the environment variables and parameters will be as described in [paperless-ngx's documentation](https://paperless-ngx.readthedocs.io/en/latest/advanced_usage.html#hooking-into-the-consumption-process) (except the values will reflect any new values updated during postprocessing).
 
 ## Management
@@ -241,4 +241,4 @@ Finally, the command line interface supports one feature that you can't do as a 
 
 ### Will this work with paperless or paperless-ng?
 
-Nope.
+Nope, just paperless-ngx.
