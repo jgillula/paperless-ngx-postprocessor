@@ -24,6 +24,8 @@ class DocumentRuleProcessor:
 
         self._env = jinja2.Environment()
         self._env.filters["expand_two_digit_year"] = self._expand_two_digit_year
+        self._env.filters["regex_match"] = self._jinja_filter_regex_match
+        self._env.filters["regex_sub"] = self._jinja_filter_regex_sub
 
     def matches(self, metadata):
         if type(self._match) is str:
@@ -62,6 +64,17 @@ class DocumentRuleProcessor:
             return f"{prefix}{int(year):02}"
         else:
             return f"{year}"
+
+    def _jinja_filter_regex_match(self, string, pattern):
+        '''Custom jinja filter for regex matching'''
+        if regex.match(pattern, string):
+            return True
+        else:
+            return False
+
+    def _jinja_filter_regex_sub(self, string, pattern, repl):
+        '''Custom jinja filter for regex substitution'''
+        return regex.sub(pattern, repl, string)
     
     def _normalize_created_dates(self, new_metadata, old_metadata):
         result = new_metadata.copy()
