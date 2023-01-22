@@ -105,6 +105,23 @@ For all three, if the new value is ever not convertible into an `int`, then it's
 
 This normalization and error-checking allows you to extract dates from the document's contents without having to worry about their format or converting month names to numbers. Instead, paperless-ngx-postprocessor does all that for you.
 
+### Custom Jinja filters
+
+In addition to the [default Jinja filters](https://jinja.palletsprojects.com/en/3.1.x/templates/#builtin-filters) the following custom filters are available:
+
+* `expand_two_digit_year(prefix=None)`
+  * Convert a two-digit year to a four-digit year. By default this will add the current century, e.g. as of 2022 this will turn `63` into `2063`. If you want to set a different century, just pass it to the filter like so: `{{ created_year | expand_two_digit_year(19) }}` (converting `77` to `1977`).
+* `regex_match(pattern)`
+  * Matches using `re.match()`. Only returns `True` or `False`. For details see the [official python documentation](https://docs.python.org/3/library/re.html#re.match).
+* `regex_sub(pattern, repl)`
+  * Substitutes using `re.sub()`. For details see the [official python documentation](https://docs.python.org/3/library/re.html#re.sub).
+
+These can be used like this:
+```
+{{ variable | custom_filter("parameter") }}
+```
+See [rulesets.d/example.yml](rulesets.d/example.yml) for examples of how to use these filters.
+
 ### Combining rulesets
 
 paperless-ngx-postprocessor reads all of the files in the `rulesets.d` folder in order, alphabetically by name. In each file, all of the postprocessing rulesets in the given file are also read in order.
