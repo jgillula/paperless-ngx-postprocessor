@@ -229,13 +229,56 @@ paperless-ngx-postprocessor can be configured using the following environment va
 
 ## Management
 
-In addition to being run as a post-consumption script, paperless-ngx-postprocessor has the ability to be run directly via a command line interface using the `paperlessngx_postprocessor.py` script. In order to run it outside the Paperless-ngx docker container, you'll need to provide the auth token you generated during setup, e.g.:
+In addition to being run as a post-consumption script, paperless-ngx-postprocessor has the ability to be run directly via a command line interface using the `paperlessngx_postprocessor.py` script. There are two ways to run `paperlessngx_postprocessor.py` as a management script: inside the docker container and outside.
 
+In both cases, you have to make sure that you've activated an appropriate Python virtual environment so that `paperlessngx_postprocessor.py` can find the Python modules it depends on to run.
+
+### Running the management script inside the Paperless-ngx docker container
+
+In order to run `paperlessngx_postprocessor.py` inside the Paperless-ngx docker container, you can enter the following line *on the Docker host*, in the directory that contains `docker-compose.yml` for Paperless-ngx (e.g. `/var/local/paperless-ngx`), in order to get a bash terminal inside the Paperless-ngx docker container:
+```bash
+docker-compose exec -u paperless webserver /bin/bash
+```
+This should bring you into the docker container, and then you can navigate to the appropriate directory inside the docker container, activate the Python virtual environment, and run `paperlessngx_postprocessor.py`:
+```bash
+cd /usr/src/paperless-ngx-postprocessor
+source venv/bin/activate
+./paperlessngx_postprocessor.py --help
+```
+
+### Running the management script from the docker host
+
+In order to run `paperlessngx_postprocessor.py` outside the Paperless-ngx docker container, you'll probably need to set up a new Python virtual environment, instead of using the one inside the Docker container, e.g. do the following on the docker *host*:
+```bash
+mkdir ~/some/directory/to/keep/the/virtual/environment
+cd ~/some/directory/to/keep/the/virtual/environment
+python -m venv --system-site-packages venv
+source venv/bin/activate
+pip install -r /whichever/directory/you/cloned/paperless-ngx-postprocessor/into/requirements.txt
+```
+
+Then any time you want to run `paperlessngx_postprocessor.py` you need to make sure to activate the Python virtual environment first (you only need to do so once, until you close that terminal), e.g. on the docker host:
+```bash
+cd ~/some/directory/to/keep/the/virtual/environment
+source venv/bin/activate
+/whichever/directory/you/cloned/paperless-ngx-postprocessor/into/paperlessngx_postprocessor.py --help
+```
+
+Note that to run the management script from the docker host, you need to provide the auth token you generated during setup, e.g. (on the docker host):
 ```bash
 ./paperlessngx_postprocessor.py --auth-token THE_AUTH_TOKEN [specific command here]
 ```
 
-For example, to apply postprocessing to all documents with `correspondent` `The Bank`, you would do:
+### Running inside or outside the docker container
+
+Note that no matter where you run it, `paperlessngx_postprocessor.py` will try to use sensible defaults to figure out how to access the Paperless-ngx API. If you have a custom configuration, you may need to specify additional configuration options to `paperlessngx_postprocessor.py`. See [Configuration](#configuration) above for more details.
+
+In terms of how the script works, it can basically run post-processing on all documents given a particular criteria. For example to re-run postprocessing on all documents with `correspondent` `The Bank`, you would do (inside the docker container):
+```bash
+./paperlessngx_postprocessor.py correspondent "The Bank"
+```
+
+Or outside in the docker host:
 ```bash
 ./paperlessngx_postprocessor.py --auth-token THE_AUTH_TOKEN correspondent "The Bank"
 ```
@@ -249,7 +292,7 @@ The command line interface supports all of the same options that you can set via
 
 Finally, the command line interface supports one feature that you can't do as a post-consumption script: restoring backups to undo changes. To restore a backup, do:
 ```bash
-./paperlessngx_postprocessor.py --auth-token THE AUTH_TOKEN restore path/to/the/backup/file/to/restore
+./paperlessngx_postprocessor.py restore path/to/the/backup/file/to/restore
 ```
 
 (If you want to see what the restore will do, you can open up the backup file in a text editor. Inside is just a yaml document with all of the document IDs and what their fields should be restored to.)
