@@ -229,9 +229,9 @@ paperless-ngx-postprocessor can be configured using the following environment va
 
 ## Management
 
-In addition to being run as a post-consumption script, paperless-ngx-postprocessor has the ability to be run directly via a command line interface using the `paperlessngx_postprocessor.py` script. There are two ways to run `paperlessngx_postprocessor.py` as a management script: inside the docker container and outside.
+In addition to being run as a post-consumption script, paperless-ngx-postprocessor has the ability to be run directly via a command line interface using the `paperlessngx_postprocessor.py` script. The primary use case is if you've changed some of your postprocessing rules and want to apply the new postprocessing rules to some of your documents without deleting them from Paperless-ngx and re-importing them.
 
-In both cases, you have to make sure that you've activated an appropriate Python virtual environment so that `paperlessngx_postprocessor.py` can find the Python modules it depends on to run.
+There are two ways to run `paperlessngx_postprocessor.py` as a management script: inside the docker container and outside. In both cases, you have to make sure that you've activated an appropriate Python virtual environment so that `paperlessngx_postprocessor.py` can find the Python modules it depends on to run.
 
 ### Running the management script inside the Paperless-ngx docker container
 
@@ -273,17 +273,16 @@ Note that to run the management script from the docker host, you need to provide
 
 Note that no matter where you run it, `paperlessngx_postprocessor.py` will try to use sensible defaults to figure out how to access the Paperless-ngx API. If you have a custom configuration, you may need to specify additional configuration options to `paperlessngx_postprocessor.py`. See [Configuration](#configuration) above for more details.
 
-In terms of how the script works, it can basically run post-processing on all documents given a particular criteria. For example to re-run postprocessing on all documents with `correspondent` `The Bank`, you would do (inside the docker container):
+In terms of how the script works in management mode, it runs post-processing on all documents given a particular criteria. In other words, you provide some criteria for what documents to re-run postprocessing on, and then `paperlessngx_postprocessor.py` will process each of those documents as if seeing it for the very first time, applying postprocessing.
+
+For example to re-run postprocessing on all documents with `correspondent` `The Bank`, you would do the following (including the auth token if running this command from the Docker host):
 ```bash
-./paperlessngx_postprocessor.py correspondent "The Bank"
+./paperlessngx_postprocessor.py [--auth-token THE_AUTH_TOKEN] correspondent "The Bank"
 ```
 
-Or outside in the docker host:
-```bash
-./paperlessngx_postprocessor.py --auth-token THE_AUTH_TOKEN correspondent "The Bank"
-```
 
-You can also choose all documents of a particular `document_type` or `storage_path`, all documents with a specific `tag`, or just all documents (using `all`), or a specific document using its `document_id`. Note that you cannot combine selectors on the command line: e.g it's not possible to select all documents that match both a given `document_type` and `tag` simultaneously on the command line.
+
+You can choose all documents of a particular `correspondent` or `document_type` or `storage_path`, all documents with a specific `tag`, or just all documents (using `all`), or a specific document using its `document_id`. Note that you cannot combine selectors on the command line: e.g it's not possible to select all documents that match both a given `document_type` and `tag` simultaneously on the command line.
 
 The command line interface supports all of the same options that you can set via the environment variables listed in the [Configuration section above](#configuration). To see how to specify them, use the command line interface's built-in help:
 ```bash
