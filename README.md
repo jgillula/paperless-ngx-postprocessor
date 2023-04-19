@@ -280,8 +280,6 @@ For example to re-run postprocessing on all documents with `correspondent` `The 
 ./paperlessngx_postprocessor.py [--auth-token THE_AUTH_TOKEN] correspondent "The Bank"
 ```
 
-
-
 You can choose all documents of a particular `correspondent` or `document_type` or `storage_path`, all documents with a specific `tag`, or just all documents (using `all`), or a specific document using its `document_id`. Note that you cannot combine selectors on the command line: e.g it's not possible to select all documents that match both a given `document_type` and `tag` simultaneously on the command line.
 
 The command line interface supports all of the same options that you can set via the environment variables listed in the [Configuration section above](#configuration). To see how to specify them, use the command line interface's built-in help:
@@ -289,12 +287,29 @@ The command line interface supports all of the same options that you can set via
 ./paperlessngx_postprocessor.py --help
 ```
 
-Finally, the command line interface supports one feature that you can't do as a post-consumption script: restoring backups to undo changes. To restore a backup, do:
+### Dry-runs, backups, and restores
+
+The command line interface also supports two feature that you can't do as a post-consumption script.
+
+First, you can do a dry-run to see what *would* change as a result of postprocessing, without actually applying the changes:
+```bash
+./paperlessngx_postprocessor.py --dry-run [the rest of the specific command here]
+``
+This is helpful when you are trying to get your postprocessing rules right, since you can see what the effect would be without messing up your documents.
+
+
+You can also make a backup when you apply postprocessing:
+```bash
+./paperlessngx_postprocessor.py --backup [the rest of the specific command here]
+```
+This will write a backup file with any fields that were changed by `paperlessngx_postprocessor.py` as they were *before* the changes were made.
+
+To restore backup to undo changes, do:
 ```bash
 ./paperlessngx_postprocessor.py restore path/to/the/backup/file/to/restore
 ```
 
-(If you want to see what the restore will do, you can open up the backup file in a text editor. Inside is just a yaml document with all of the document IDs and what their fields should be restored to.)
+If you want to see what the restore will do, you can open up the backup file in a text editor. Inside is just a yaml document with all of the document IDs and what their fields should be restored to.
 
 ## FAQ
 
