@@ -294,7 +294,7 @@ The command line interface also supports two feature that you can't do as a post
 First, you can do a dry-run to see what *would* change as a result of postprocessing, without actually applying the changes:
 ```bash
 ./paperlessngx_postprocessor.py --dry-run [the rest of the specific command here]
-``
+```
 This is helpful when you are trying to get your postprocessing rules right, since you can see what the effect would be without messing up your documents.
 
 
