@@ -229,30 +229,87 @@ paperless-ngx-postprocessor can be configured using the following environment va
 
 ## Management
 
-In addition to being run as a post-consumption script, paperless-ngx-postprocessor has the ability to be run directly via a command line interface using the `paperlessngx_postprocessor.py` script. In order to run it outside the Paperless-ngx docker container, you'll need to provide the auth token you generated during setup, e.g.:
+In addition to being run as a post-consumption script, paperless-ngx-postprocessor has the ability to be run directly via a command line interface using the `paperlessngx_postprocessor.py` script. The primary use case is if you've changed some of your postprocessing rules and want to apply the new postprocessing rules to some of your documents without deleting them from Paperless-ngx and re-importing them.
 
+There are two ways to run `paperlessngx_postprocessor.py` as a management script: inside the docker container and outside. In both cases, you have to make sure that you've activated an appropriate Python virtual environment so that `paperlessngx_postprocessor.py` can find the Python modules it depends on to run.
+
+### Running the management script inside the Paperless-ngx docker container
+
+In order to run `paperlessngx_postprocessor.py` inside the Paperless-ngx docker container, you can enter the following line *on the Docker host*, in the directory that contains `docker-compose.yml` for Paperless-ngx (e.g. `/var/local/paperless-ngx`), in order to get a bash terminal inside the Paperless-ngx docker container:
+```bash
+docker-compose exec -u paperless webserver /bin/bash
+```
+This should bring you into the docker container, and then you can navigate to the appropriate directory inside the docker container, activate the Python virtual environment, and run `paperlessngx_postprocessor.py`:
+```bash
+cd /usr/src/paperless-ngx-postprocessor
+source venv/bin/activate
+./paperlessngx_postprocessor.py --help
+```
+
+### Running the management script from the docker host
+
+In order to run `paperlessngx_postprocessor.py` outside the Paperless-ngx docker container, you'll probably need to set up a new Python virtual environment, instead of using the one inside the Docker container, e.g. do the following on the docker *host*:
+```bash
+mkdir ~/some/directory/to/keep/the/virtual/environment
+cd ~/some/directory/to/keep/the/virtual/environment
+python -m venv --system-site-packages venv
+source venv/bin/activate
+pip install -r /whichever/directory/you/cloned/paperless-ngx-postprocessor/into/requirements.txt
+```
+
+Then any time you want to run `paperlessngx_postprocessor.py` you need to make sure to activate the Python virtual environment first (you only need to do so once, until you close that terminal), e.g. on the docker host:
+```bash
+cd ~/some/directory/to/keep/the/virtual/environment
+source venv/bin/activate
+/whichever/directory/you/cloned/paperless-ngx-postprocessor/into/paperlessngx_postprocessor.py --help
+```
+
+Note that to run the management script from the docker host, you need to provide the auth token you generated during setup, e.g. (on the docker host):
 ```bash
 ./paperlessngx_postprocessor.py --auth-token THE_AUTH_TOKEN [specific command here]
 ```
 
-For example, to apply postprocessing to all documents with `correspondent` `The Bank`, you would do:
+### Running inside or outside the docker container
+
+Note that no matter where you run it, `paperlessngx_postprocessor.py` will try to use sensible defaults to figure out how to access the Paperless-ngx API. If you have a custom configuration, you may need to specify additional configuration options to `paperlessngx_postprocessor.py`. See [Configuration](#configuration) above for more details.
+
+In terms of how the script works in management mode, it runs post-processing on all documents given a particular criteria. In other words, you provide some criteria for what documents to re-run postprocessing on, and then `paperlessngx_postprocessor.py` will process each of those documents as if seeing it for the very first time, applying postprocessing.
+
+For example to re-run postprocessing on all documents with `correspondent` `The Bank`, you would do the following (including the auth token if running this command from the Docker host):
 ```bash
-./paperlessngx_postprocessor.py --auth-token THE_AUTH_TOKEN correspondent "The Bank"
+./paperlessngx_postprocessor.py [--auth-token THE_AUTH_TOKEN] correspondent "The Bank"
 ```
 
-You can also choose all documents of a particular `document_type` or `storage_path`, all documents with a specific `tag`, or just all documents (using `all`), or a specific document using its `document_id`. Note that you cannot combine selectors on the command line: e.g it's not possible to select all documents that match both a given `document_type` and `tag` simultaneously on the command line.
+You can choose all documents of a particular `correspondent` or `document_type` or `storage_path`, all documents with a specific `tag`, or just all documents (using `all`), or a specific document using its `document_id`. Note that you cannot combine selectors on the command line: e.g it's not possible to select all documents that match both a given `document_type` and `tag` simultaneously on the command line.
 
 The command line interface supports all of the same options that you can set via the environment variables listed in the [Configuration section above](#configuration). To see how to specify them, use the command line interface's built-in help:
 ```bash
 ./paperlessngx_postprocessor.py --help
 ```
 
-Finally, the command line interface supports one feature that you can't do as a post-consumption script: restoring backups to undo changes. To restore a backup, do:
+### Dry-runs, backups, and restores
+
+The command line interface also supports two feature that you can't do as a post-consumption script.
+
+First, you can do a dry-run to see what *would* change as a result of postprocessing, without actually applying the changes:
 ```bash
-./paperlessngx_postprocessor.py --auth-token THE AUTH_TOKEN restore path/to/the/backup/file/to/restore
+./paperlessngx_postprocessor.py --dry-run [the rest of the specific command here]
+```
+This is helpful when you are trying to get your postprocessing rules right, since you can see what the effect would be without messing up your documents.
+
+
+You can also make a backup when you apply postprocessing:
+```bash
+./paperlessngx_postprocessor.py --backup [the rest of the specific command here]
+```
+This will write a backup file with any fields that were changed by `paperlessngx_postprocessor.py` as they were *before* the changes were made.
+
+To restore backup to undo changes, do:
+```bash
+./paperlessngx_postprocessor.py restore path/to/the/backup/file/to/restore
 ```
 
-(If you want to see what the restore will do, you can open up the backup file in a text editor. Inside is just a yaml document with all of the document IDs and what their fields should be restored to.)
+If you want to see what the restore will do, you can open up the backup file in a text editor. Inside is just a yaml document with all of the document IDs and what their fields should be restored to.
 
 ## FAQ
 
