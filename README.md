@@ -52,6 +52,8 @@ Still in the directory of your Paperless-ngx instance, run the following command
 docker-compose exec -u paperless webserver /usr/src/paperless-ngx-postprocessor/setup_venv.sh
 ```
 
+Note that if you are running paperless-ngx in a Docker container, you will need to redo this step after any time you upgrade.
+
 ### 3. Create an auth token
 Next we'll need create an authentication token in your Paperless-ngx instance. To do this, go to the 'Add token' page in your paperless-ngx admin console, e.g. [http://localhost:8000/admin/authtoken/tokenproxy/add/](http://localhost:8000/admin/authtoken/tokenproxy/add/). Choose which user you want paperless-ngx-postprocessor to run as, and then click "SAVE".
 
@@ -310,6 +312,10 @@ To restore backup to undo changes, do:
 ```
 
 If you want to see what the restore will do, you can open up the backup file in a text editor. Inside is just a yaml document with all of the document IDs and what their fields should be restored to.
+
+### Upgrading
+
+If you are running paperless-ngx in a Docker container, you will need to redo [setup step two](#2-run-the-one-time-setup-script-inside-the-paperless-ngx-docker-container) after any time you upgrade paperless-ngx.
 
 ## FAQ
 
