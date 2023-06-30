@@ -2,6 +2,7 @@ import dateutil.parser
 import logging
 import os
 import requests
+from datetime import date
 from pathlib import Path
 
 class PaperlessAPI:
@@ -84,6 +85,54 @@ class PaperlessAPI:
             query = f"{selector}s__id={selector_id}"
         return self._get_list("documents", query) 
 
+    def get_documents_by_field_names(self, **fields):
+        allowed_fields = {"correspondent": "correspondent__name__iexact",
+                          "document_type": "document_type__name__iexact",
+                          "storage_path": "storage_path__name__iexact",
+                          "added_year": "added__year",
+                          "added_month": "added__month",
+                          "added_day": "added_day",
+                          "asn": "archive_serial_number",
+                          "title": "title__iexact",
+                          "created_year": "created__year",
+                          "created_month": "created__month",
+                          "created_day": "created__day",
+        }
+
+        queries = []
+        for key in allowed_fields.keys():
+            if key in fields.keys() and fields[key] is not None:
+                queries.append(f"{allowed_fields[key]}={fields[key]}")
+
+        if (isinstance(fields.get("added_range"), (tuple, list)) and
+            len(fields.get("added_range")) == 2):
+            if isinstance(fields["added_range"][0], date):
+                queries.append(f"added__date__gt={fields['added_range'][0].strftime('%F')}")
+            if isinstance(fields["added_range"][1], date):
+                queries.append(f"added__date__lt={fields['added_range'][1].strftime('%F')}")
+
+        if (isinstance(fields.get("created_range"), (tuple, list)) and
+            len(fields.get("created_range")) == 2):
+            if isinstance(fields["created_range"][0], date):
+                queries.append(f"created__date__gt={fields['created_range'][0].strftime('%F')}")
+            if isinstance(fields["created_range"][1], date):
+                queries.append(f"created__date__lt={fields['created_range'][1].strftime('%F')}")
+
+
+        if isinstance(fields.get("added_date_object"), date):
+            queries.append(f"added__year={fields['added_date_object'].year}&added__month={fields['added_date_object'].month}&added__day={fields['added_date_object'].day}")
+
+        if isinstance(fields.get("created_date_object"), date):
+            queries.append(f"created__year={fields['created_date_object'].year}&created__month={fields['created_date_object'].month}&created__day={fields['created_date_object'].day}")
+
+        query = "&".join(queries)
+        self._logger.debug(f"Running query '{query}'")
+        return self._get_list("documents", query)
+
+
+    # def get_documents_from_query(self, query):
+    #     return self._get_list("documents", query)
+
     def get_all_documents(self):
         return self._get_list("documents")
 
@@ -104,6 +153,7 @@ class PaperlessAPI:
 
     def get_metadata_in_filename_format(self, metadata):
         new_metadata = {}
+        new_metadata["document_id"] = metadata["id"]
         new_metadata["correspondent"] = (self.get_correspondent_by_id(metadata["correspondent"])).get("name")
         new_metadata["document_type"] = (self.get_document_type_by_id(metadata["document_type"])).get("name")
         new_metadata["storage_path"] = (self.get_storage_path_by_id(metadata["storage_path"])).get("name")
@@ -115,16 +165,21 @@ class PaperlessAPI:
         new_metadata["created_year"] = f"{created_date.year:04d}"
         new_metadata["created_month"] = f"{created_date.month:02d}"
         new_metadata["created_day"] = f"{created_date.day:02d}"
+        new_metadata["created_date"] = created_date.strftime("%F") # %F means YYYY-MM-DD
+        new_metadata["created_date_object"] = created_date
         new_metadata["added"] = metadata["added"]
         added_date = dateutil.parser.isoparse(new_metadata["added"])
         new_metadata["added_year"] = f"{added_date.year:04d}"
         new_metadata["added_month"] = f"{added_date.month:02d}"
         new_metadata["added_day"] = f"{added_date.day:02d}"
+        new_metadata["added_date"] = added_date.strftime("%F")
+        new_metadata["added_date_object"] = added_date
         
         return new_metadata
 
     def get_metadata_from_filename_format(self, metadata_in_filename_format):
         result = {}
+        result["id"] = metadata_in_filename_format["document_id"]
         result["correspondent"] = self.get_item_id_by_name("correspondents", metadata_in_filename_format["correspondent"])
         result["document_type"] = self.get_item_id_by_name("document_types", metadata_in_filename_format["document_type"])
         result["storage_path"] = self.get_item_id_by_name("storage_paths", metadata_in_filename_format["storage_path"])

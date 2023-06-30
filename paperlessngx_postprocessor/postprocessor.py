@@ -4,28 +4,35 @@ import jinja2
 import logging
 import regex
 import yaml
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from .paperless_api import PaperlessAPI
 
 class DocumentRuleProcessor:
-    def __init__(self, spec, logger = None):
+    def __init__(self, api, spec, logger = None):
         self._logger = logger
         if self._logger is None:
             logging.basicConfig(format="[%(asctime)s] [%(levelname)s] [%(module)s] %(message)s", level="CRITICAL")
             self._logger = logging.getLogger()
 
+        self._api = api
+
         self.name = list(spec.keys())[0]
         self._match = spec[self.name].get("match")
         self._metadata_regex = spec[self.name].get("metadata_regex")
         self._metadata_postprocessing = spec[self.name].get("metadata_postprocessing")
+        self._validation_rule = spec[self.name].get("validation_rule")
         #self._title_format = spec[self.name].get("title_format")
 
         self._env = jinja2.Environment()
         self._env.filters["expand_two_digit_year"] = self._expand_two_digit_year
         self._env.filters["regex_match"] = self._jinja_filter_regex_match
         self._env.filters["regex_sub"] = self._jinja_filter_regex_sub
+        self._env.globals["last_date_object_of_month"] = self._last_date_object_of_month
+        self._env.globals["num_documents"] = self._num_documents
+        self._env.globals["date"] = date
+        self._env.globals["timedelta"] = timedelta
 
     def matches(self, metadata):
         if type(self._match) is str:
@@ -65,6 +72,60 @@ class DocumentRuleProcessor:
         else:
             return f"{year}"
 
+    def _last_date_object_of_month(self, date_object):
+        if isinstance(date_object, date):
+            return date(date_object.year, date_object.month, calendar.monthrange(date_object.year, date_object.month)[1])
+        return None
+
+    def _num_documents(self, **constraints):
+        # allowed_constraints = {"correspondent": "correspondent__name__iexact",
+        #                        "document_type": "document_type__name__iexact",
+        #                        "storage_path": "storage_path__name__iexact",
+        #                        "added_year": "added__year",
+        #                        "added_month": "added__month",
+        #                        "added_day": "added_day",
+        #                        "asn": "archive_serial_number",
+        #                        "title": "title__iexact",
+        #                        "created_year": "created__year",
+        #                        "created_month": "created__month",
+        #                        "created_day": "created__day",
+        # }
+
+        # queries = []
+        # for key in allowed_constraints.keys():
+        #     if key in constraints.keys():
+        #         queries.append(f"{allowed_constraints[key]}={constraints[key]}")
+
+        # if (isinstance(constraints.get("added_range"), (tuple, list)) and
+        #     len(constraints.get("added_range")) == 2):
+        #     if isinstance(constraints["added_range"][0], date):
+        #         queries.append(f"added__date__gt={constraints['added_range'][0].strftime('%F')}")
+        #     if isinstance(constraints["added_range"][1], date):
+        #         queries.append(f"added__date__lt={constraints['added_range'][1].strftime('%F')}")
+
+        # if (isinstance(constraints.get("created_range"), (tuple, list)) and
+        #     len(constraints.get("created_range")) == 2):
+        #     if isinstance(constraints["created_range"][0], date):
+        #         queries.append(f"created__date__gt={constraints['created_range'][0].strftime('%F')}")
+        #     if isinstance(constraints["created_range"][1], date):
+        #         queries.append(f"created__date__lt={constraints['created_range'][1].strftime('%F')}")
+
+
+        # if isinstance(constraints.get("added_date_object"), date):
+        #     queries.append(f"added__year={constraints['added_date_object'].year}&added__month={constraints['added_date_object'].month}&added__day={constraints['added_date_object'].day}")
+
+        # if isinstance(constraints.get("created_date_object"), date):
+        #     queries.append(f"created__year={constraints['created_date_object'].year}&created__month={constraints['created_date_object'].month}&created__day={constraints['created_date_object'].day}")
+
+        # query = "&".join(queries)
+        # self._logger.debug(f"Running query '{query}'")
+
+        #items = self._api.get_documents_from_query(query)
+        items = self._api.get_documents_by_field_names(**constraints)
+        self._logger.debug(f"Found {len(items)} documents matching the query")
+
+        return len(items)
+
     def _jinja_filter_regex_match(self, string, pattern):
         '''Custom jinja filter for regex matching'''
         if regex.match(pattern, string):
@@ -78,23 +139,37 @@ class DocumentRuleProcessor:
     
     def _normalize_created_dates(self, new_metadata, old_metadata):
         result = new_metadata.copy()
-        #if "created_year" in metadata.keys():
         try:
             result["created_year"] = str(int(new_metadata["created_year"]))
         except:
             result["created_year"] = old_metadata["created_year"]
-        #if "created_month" in metadata.keys():
         result["created_month"] = self._normalize_month(new_metadata["created_month"], old_metadata["created_month"])
-        #if "created_day" in metadata.keys():
         result["created_day"] = self._normalize_day(new_metadata["created_day"], old_metadata["created_day"])
 
         original_created_date = dateutil.parser.isoparse(old_metadata["created"])
         new_created_date = datetime(int(result["created_year"]), int(result["created_month"]), int(result["created_day"]), 12, tzinfo=original_created_date.tzinfo)
         result["created"] = new_created_date.isoformat()
         result["created_date"] = new_created_date.strftime("%F") # %F means YYYY-MM-DD
-        
+        result["created_date_object"] = date(int(result["created_year"]), int(result["created_month"]), int(result["created_day"]))
+
         return result
 
+    def validate(self, metadata):
+        valid = True
+
+        metadata = self._normalize_created_dates(metadata, metadata)
+
+        # Try to apply the validation rule
+        if self._validation_rule is not None:
+            self._logger.debug(f"Validating for rule {self.name}")
+            template = self._env.from_string(self._validation_rule)
+            valid = (template.render(**metadata).strip() != "False")
+            if not valid:
+                self._logger.warning(f"Failed validation rule '{self._validation_rule}'")
+        else:
+            self._logger.debug(f"No validation rule found for {self.name}")
+
+        return valid
         
     def get_new_metadata(self, metadata, content):
         read_only_metadata_keys = ["correspondent",
@@ -104,7 +179,7 @@ class DocumentRuleProcessor:
                                    "added",
                                    "added_year",
                                    "added_month",
-                                   "added_day"]        
+                                   "added_day"]
         read_only_metadata = {key: metadata[key] for key in read_only_metadata_keys if key in metadata}
         writable_metadata_keys = list(set(metadata.keys()) - set(read_only_metadata_keys))
         writable_metadata = {key: metadata[key] for key in writable_metadata_keys if key in metadata}
@@ -128,7 +203,7 @@ class DocumentRuleProcessor:
                     old_value = writable_metadata.get(variable_name)
                     merged_metadata = {**writable_metadata, **read_only_metadata}
                     template = self._env.from_string(self._metadata_postprocessing[variable_name])
-                    writable_metadata[variable_name] = template.render(**merged_metadata)                    
+                    writable_metadata[variable_name] = template.render(**merged_metadata)
                     writable_metadata = self._normalize_created_dates(writable_metadata, metadata)
                     self._logger.debug(f"Updating '{variable_name}' using template {self._metadata_postprocessing[variable_name]} and metadata {merged_metadata}\n: '{old_value}'->'{writable_metadata[variable_name]}'")
                 except Exception as e:
@@ -142,7 +217,7 @@ class DocumentRuleProcessor:
 
 
 class Postprocessor:
-    def __init__(self, api, rules_dir, postprocessing_tag = None, dry_run = False, logger = None):
+    def __init__(self, api, rules_dir, postprocessing_tag = None, invalid_tag = None, dry_run = False, skip_validation = False, logger = None):
         self._logger = logger
         if self._logger is None:
             logging.basicConfig(format="[%(asctime)s] [%(levelname)s] [%(module)s] %(message)s", level="CRITICAL")
@@ -154,7 +229,15 @@ class Postprocessor:
             self._postprocessing_tag_id = self._api.get_item_id_by_name("tags", postprocessing_tag)
         else:
             self._postprocessing_tag_id = None
+
+        if invalid_tag is not None:
+            self._invalid_tag_id = self._api.get_item_id_by_name("tags", invalid_tag)
+        else:
+            self._invalid_tag_id = None
+
+
         self._dry_run = dry_run
+        self._skip_validation = skip_validation
 
         self._processors = []
     
@@ -164,7 +247,7 @@ class Postprocessor:
                     try:
                         yaml_documents = yaml.safe_load_all(yaml_file)
                         for yaml_document in yaml_documents:
-                            self._processors.append(DocumentRuleProcessor(yaml_document, self._logger))
+                            self._processors.append(DocumentRuleProcessor(self._api, yaml_document, self._logger))
                     except Exception as e:
                         self._logger.warning(f"Unable to parse yaml in {filename}: {e}")
         self._logger.debug(f"Loaded {len(self._processors)} rules")
@@ -183,6 +266,12 @@ class Postprocessor:
 
         return new_metadata
 
+    def _validate(self, metadata_in_filename_format):
+        for processor in self._processors:
+            if processor.matches(metadata_in_filename_format):
+                if not processor.validate(metadata_in_filename_format):
+                    return False
+        return True
 
     def postprocess(self, documents):
         backup_documents = []
@@ -212,7 +301,24 @@ class Postprocessor:
                     self._logger.info(f"No changes for document_id={document['id']}")
             else:
                 self._logger.info(f"No changes for document_id={document['id']}")
-            
+
+            if (not self._skip_validation) and (self._invalid_tag_id is not None):
+                metadata_in_filename_format = self._api.get_metadata_in_filename_format(document)
+                metadata = self._api.get_metadata_from_filename_format(metadata_in_filename_format)
+                valid = self._validate(metadata_in_filename_format)
+                if not valid:
+                    metadata["tags"].append(self._invalid_tag_id)
+                    self._logger.warning(f"document_id={document['id']} is invalid, adding tag {self._invalid_tag_id}")
+                    if not self._dry_run:
+                        self._api.patch_document(document["id"], {"tags": metadata["tags"]})
+                        backup_data = {"tags": metadata["tags"]}
+                        backup_data["id"] = document["id"]
+                        backup_documents.append(backup_data)
+                else:
+                    self._logger.info(f"document_id={document['id']} is valid")
+            else:
+                self._logger.info("Validation was skipped")
+
         return backup_documents
         
 #         # if "created_year" in regex_data.keys():
