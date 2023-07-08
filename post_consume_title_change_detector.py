@@ -19,7 +19,7 @@ if __name__ == "__main__":
 
     new_filename = Path(os.environ["DOCUMENT_SOURCE_PATH"]).name
     if old_filename != new_filename:
-        config = Config()
+        config = Config(Config.general_options())
         api = PaperlessAPI(config["paperless_api_url"],
                            auth_token = config["auth_token"],
                            paperless_src_dir = config["paperless_src_dir"])

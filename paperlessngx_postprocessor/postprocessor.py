@@ -147,7 +147,7 @@ class DocumentRuleProcessor:
         result["created_day"] = self._normalize_day(new_metadata["created_day"], old_metadata["created_day"])
 
         original_created_date = dateutil.parser.isoparse(old_metadata["created"])
-        new_created_date = datetime(int(result["created_year"]), int(result["created_month"]), int(result["created_day"]), 12, tzinfo=original_created_date.tzinfo)
+        new_created_date = datetime(int(result["created_year"]), int(result["created_month"]), int(result["created_day"]), original_created_date.hour, tzinfo=original_created_date.tzinfo)
         result["created"] = new_created_date.isoformat()
         result["created_date"] = new_created_date.strftime("%F") # %F means YYYY-MM-DD
         result["created_date_object"] = date(int(result["created_year"]), int(result["created_month"]), int(result["created_day"]))
@@ -161,9 +161,11 @@ class DocumentRuleProcessor:
 
         # Try to apply the validation rule
         if self._validation_rule is not None:
-            self._logger.debug(f"Validating for rule {self.name}")
+            self._logger.debug(f"Validating for rule {self.name} using metadata={metadata}")
             template = self._env.from_string(self._validation_rule)
-            valid = (template.render(**metadata).strip() != "False")
+            template_result = template.render(**metadata).strip()
+            self._logger.debug(f"Validation template rendered to '{template_result}'")
+            valid = (template_result != "False")
             if not valid:
                 self._logger.warning(f"Failed validation rule '{self._validation_rule}'")
         else:
@@ -179,7 +181,8 @@ class DocumentRuleProcessor:
                                    "added",
                                    "added_year",
                                    "added_month",
-                                   "added_day"]
+                                   "added_day",
+                                   "document_id"]
         read_only_metadata = {key: metadata[key] for key in read_only_metadata_keys if key in metadata}
         writable_metadata_keys = list(set(metadata.keys()) - set(read_only_metadata_keys))
         writable_metadata = {key: metadata[key] for key in writable_metadata_keys if key in metadata}
@@ -194,8 +197,8 @@ class DocumentRuleProcessor:
                 writable_metadata = self._normalize_created_dates(writable_metadata, metadata)
                 self._logger.debug(f"Regex results are {writable_metadata}")
             else:
-                self._logger.warning(f"Regex '{self._metadata_regex}' for '{self.name}' didn't match")
-                
+                self._logger.warning(f"Regex '{self._metadata_regex}' for '{self.name}' didn't match for document_id={metadata['document_id']}")
+
         # Cycle throguh the postprocessing rules
         if self._metadata_postprocessing is not None:
             for variable_name in self._metadata_postprocessing.keys():
@@ -275,6 +278,7 @@ class Postprocessor:
 
     def postprocess(self, documents):
         backup_documents = []
+        num_invalid = 0
         for document in documents:
             metadata_in_filename_format = self._api.get_metadata_in_filename_format(document)
             self._logger.debug(f"metadata_in_filename_format={metadata_in_filename_format}")
@@ -303,10 +307,12 @@ class Postprocessor:
                 self._logger.info(f"No changes for document_id={document['id']}")
 
             if (not self._skip_validation) and (self._invalid_tag_id is not None):
-                metadata_in_filename_format = self._api.get_metadata_in_filename_format(document)
+                # Note that we have to refetch the document here to get the changes we just applied from postprocessing
+                metadata_in_filename_format = self._api.get_metadata_in_filename_format(self._api.get_document_by_id(document['id']))
                 metadata = self._api.get_metadata_from_filename_format(metadata_in_filename_format)
                 valid = self._validate(metadata_in_filename_format)
                 if not valid:
+                    num_invalid += 1
                     metadata["tags"].append(self._invalid_tag_id)
                     self._logger.warning(f"document_id={document['id']} is invalid, adding tag {self._invalid_tag_id}")
                     if not self._dry_run:
@@ -317,7 +323,10 @@ class Postprocessor:
                 else:
                     self._logger.info(f"document_id={document['id']} is valid")
             else:
-                self._logger.info("Validation was skipped")
+                self._logger.info(f"Validation was skipped since invalid_tag_id={self._invalid_tag_id} and skip_validation={self._skip_validation}")
+
+        if num_invalid > 0:
+            self._logger.warning(f"Found {num_invalid}/{len(documents)} invalid documents")
 
         return backup_documents
         

@@ -23,6 +23,8 @@ class PaperlessAPI:
             logging.debug(f"Auth token {auth_token} acquired")
 
         self._auth_token = auth_token
+        self._cache = {}
+        self._cachable_types = ["correspondents", "document_types", "storage_paths", "tags"]
 
     def delete_document_by_id(self, document_id):
         item_type = "documents"
@@ -48,6 +50,11 @@ class PaperlessAPI:
         return {}
 
     def _get_list(self, item_type, query=None):
+        # If the given item type has been cached, return it
+        if item_type in self._cache and query is None:
+            self._logger.debug(f"Returning {item_type} list from cache")
+            return self._cache[item_type]
+
         items = []
         next_url = f"{self._api_url}/{item_type}/"
         if query is not None:
@@ -62,6 +69,9 @@ class PaperlessAPI:
             else:
                 next_url = None
             
+        if item_type in self._cachable_types:
+            self._cache[item_type] = items
+
         return items
 
     def get_item_id_by_name(self, item_type, item_name):

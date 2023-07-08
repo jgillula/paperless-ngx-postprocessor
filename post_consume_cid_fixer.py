@@ -12,7 +12,7 @@ from paperlessngx_postprocessor import Config, PaperlessAPI
 if __name__ == "__main__":
     document_id = os.environ["DOCUMENT_ID"]
 
-    config = Config()
+    config = Config(Config.general_options())
     logging.basicConfig(format="[%(asctime)s] [%(levelname)s] [%(module)s] %(message)s", level=config["verbose"])
 
     api = PaperlessAPI(config["paperless_api_url"],
