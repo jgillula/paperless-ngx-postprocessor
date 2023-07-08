@@ -39,12 +39,12 @@ class PaperlessAPI:
             return {}
         
     def _get_item_by_id(self, item_type, item_id):
-        response = requests.get(f"{self._api_url}/{item_type}/{item_id}/",
+        if item_id:
+            response = requests.get(f"{self._api_url}/{item_type}/{item_id}/",
                                 headers = {"Authorization": f"Token {self._auth_token}"})
-        if response.ok:
-            return response.json()
-        else:
-            return {}
+            if response.ok:
+                return response.json()
+        return {}
 
     def _get_list(self, item_type, query=None):
         items = []
