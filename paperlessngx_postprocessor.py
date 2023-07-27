@@ -23,7 +23,7 @@ if __name__ == "__main__":
 
     subparsers = arg_parser.add_subparsers(dest="mode", title='Modes', help="Use 'process [ARGS]' to choose which documents to process, or 'restore FILENAME' to restore a backup file.")
 
-    process_subparser = subparsers.add_parser("process", usage=f"{os.path.basename(__file__)} [OPTIONS] process [SELECTORS]", description='Process documents where all the [SELECTORS] match (e.g. a collective "and"). At least one selector is required. If --all or --document-id is given, all the other selectors are ignored.')
+    process_subparser = subparsers.add_parser("process", usage=f"{os.path.basename(__file__)} [OPTIONS] process [SELECTORS]", description='Process documents where all the [SELECTORS] match (e.g. a collective "and"). At least one selector is required. If --all or --document-id is given, all the other selectors are ignored. For help with general [OPTIONS], do \'paperlessngx_postprocessor.py --help\'')
     selector_group = process_subparser.add_argument_group(title="SELECTORS")
     selector_config = Config(Config.selector_options(), use_environment_variables=False)
     for option_name in selector_config.options_spec.keys():
