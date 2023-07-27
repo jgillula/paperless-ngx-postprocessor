@@ -15,14 +15,15 @@ if __name__ == "__main__":
 
     if document_id is not None:
         subprocess.run((str(Path(directory)/"paperlessngx_postprocessor.py"),
-                        "document_id",
+                        "process",
+                        "--document-id",
                         document_id))
 
         post_consume_script = os.environ.get("PNGX_POSTPROCESSOR_POST_CONSUME_SCRIPT")
         if post_consume_script is not None:
             logging.basicConfig(format="[%(asctime)s] [%(levelname)s] [%(module)s] %(message)s")
             
-            config = Config()
+            config = Config(Config.general_options())
             
             logging.getLogger().setLevel(config["verbose"])
             

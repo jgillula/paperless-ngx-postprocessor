@@ -8,6 +8,7 @@ paperless-ngx-postprocessor allows you to automatically set titles, ASNs, and cr
 * Setup rulesets to choose which documents are postprocessed and which are ignored, based on metadata like correspondent, document_type, storage_path, tags, and more
 * For each ruleset, extract metadata using [Python regular expressions](https://docs.python.org/3/library/re.html#regular-expression-syntax)
 * Use [Jinja templates](https://jinja.palletsprojects.com/en/3.1.x/templates/) to specify new values for archive serial number, title, and created date, using the values from your regular expression
+* Optionally use [Jinja templates](https://jinja.palletsprojects.com/en/3.1.x/templates/) to validate document metadata, and add a tag to documents that have invalid metadata (e.g. to catch parsing errors)
 * Optionally apply a tag to documents that are changed during postprocessing, so you can keep track of which documents have changed
 * Optionally make backups of changes, so you can restore document metadata back to the way it was before postprocessing
 * Optionally run on one or more existing documents, if you need to adjust the metadata of documents that have already been consumed by Paperless-ngx
@@ -65,6 +66,8 @@ Last but not least, create rulesets in the `paperless-postprocessor-ngx/rulesets
 
 paperless-ngx-postprocessor works by reading rulesets from all the `.yml` files in the `rulesets.d` folder, seeing if the contents of the document match any of the rulesets, extracting values from the document's contents using a regular expression, and then writing new values for the metadata based on the document's preexisting metadata and any values extracted using the regular expression.
 
+You can also provide an optional validation rule to catch documents whose metadata doesn't get set properly.
+
 ### An example
 
 An example helps illustrate this. Say you have the following ruleset:
@@ -75,6 +78,7 @@ Some Ruleset Name:
   metadata_postprocessing:
     source: '{{ source | title }}' # This applies the Jinja 'title' filter, capitalizing each word
     title: '{{created_year}}-{{created_month}}-{{created_day}} -- {{correspondent}} -- {{document_type}} (from {{ source }})'
+  validation_rule: '{{ created_date_object == last_date_object_of_month(created_date_object) }}'
 ```
 
 First paperless-ngx-postprocessor will get a local copy of the document's preexisting metadata. For a full list of the preexisting metadata you can use for matching and postprocessing, see [below](#available-metadata).
@@ -94,9 +98,11 @@ Finally after all the rules are processed, paperless-ngx-postprocessor will take
 
 If any of those differ from the values the document's metadata had when we started, then paperless-ngx-postprocessor will push the new values to paperless-ngx, and processing is complete.
 
+After all of those values have been pushed, paperless-ngx-postprocessor will then try to evaluate the `validation_rule` field. In this case, the validation rule evaluates to `True` if the document's created date is the last day of the month.
+
 ### Some caveats
 
-In order to make parsing dates easier, paperless-postprocessor-ngx will "normalize" and error-check the `created_year`, `created_month`, and `created_day` fields after the initial values are extracted using the regular expression, and after every individual postprocessing rule.
+In order to make parsing dates easier, paperless-ngx-postprocessor will "normalize" and error-check the `created_year`, `created_month`, and `created_day` fields after the initial values are extracted using the regular expression, and after every individual postprocessing rule.
 
 Normalization is as follows:
 * `created_day` will be turned into a zero-padded two-digit string (e.g. `09`).
@@ -117,6 +123,14 @@ In addition to the [default Jinja filters](https://jinja.palletsprojects.com/en/
   * Matches using `re.match()`. Only returns `True` or `False`. For details see the [official python documentation](https://docs.python.org/3/library/re.html#re.match).
 * `regex_sub(pattern, repl)`
   * Substitutes using `re.sub()`. For details see the [official python documentation](https://docs.python.org/3/library/re.html#re.sub).
+* `date(year, month, day)`
+  * Creates a [Python `date` object](https://docs.python.org/3/library/datetime.html#date-objects) for the given date. This allows easier date manipulation inside Jinja templates.
+* `timedelta(days=0, seconds=0, microseconds=0, milliseconds=0, minutes=0, hours=0, weeks=0)`
+  * Creates a [Python `timedelta` object](https://docs.python.org/3/library/datetime.html#timedelta-objects). This allows easier date manipulation inside Jinja templates.
+* `last_date_object_of_month(date_object)`
+  * Takes a Python `date` object, extracts its month, and returns a new `date` object that corresponds to the last day of that month.
+* `num_documents(**constraints)`
+  * Queries paperless to see how many documents satisfy all of the `constraints`. For more information see FIXME below.
 
 These can be used like this:
 ```
@@ -171,6 +185,86 @@ Each of the rules will match any and every document (since their `match` field i
    6. Since fields persist across rulesets, and `bar` was set in the `First Ruleset`, title will be set to `uppercase foo is YOU_FOUND_ME`.
    7. This title will then be used to finally update paperless-ngx.
 
+### The `num_documents()` filter
+
+The `num_documents()` filter is primarily intended for validation rules. It returns the number of documents that match *all* of the given constraints. Each of the constraints must be specified by keyword. Valid arguments are:
+* `correspondent` - The name of the correspondent
+* `document_type` - The name of the document type
+* `storage_path` - The name of the storage path
+* `asn` - The archive serial number
+* `title` - The title of the document
+* `added_year` - The added year (as an `int`)
+* `added_month` - The added month (as an `int`)
+* `added_day` - The added day (as an `int`)
+* `added_date_object` - The added date as a Python `date` object. This is essentially a quicker way than specifying all of `added_year`, `added_month`, and `added_day`.
+* `added_range` - Finds documents created within a given range. The value should be a tuple containing two `date` objects, e.g. `(start_date, end_date)`. If either date is `None`, then that side of the limit is ignored. The limits are exclusive, so `(date(2063,04,01), None)` will find documents created on or after April 2, 2063, and will not match any documents created on April 1.
+* `created_year` - The created year (as an `int`)
+* `created_month` - The created month (as an `int`)
+* `created_day` - The created day (as an `int`)
+* `created_date_object` - The created date as a Python `date` object. This is essentially a quicker way than specifying all of `created_year`, `created_month`, and `created_day`.
+* `created_range` - Finds documents created within a given range. The value should be a tuple containing two `date` objects, e.g. `(start_date, end_date)`. If either date is `None`, then that side of the limit is ignored. The limits are exclusive, so `(date(2063,04,01), None)` will find documents created on or after April 2, 2063, and will not match any documents created on April 1.
+
+Some examples will help explain how to use `num_documents()`.
+
+### Example validation rules
+
+Say you have documents whose creation dates should only be the end of the month (e.g. a bank statement). To catch documents whose creation date isn't the end of the month, you could use:
+```yaml
+validation_rule: "{{ created_date_object == last_date_object_of_month(created_date_object) }}"
+```
+
+Say you have documents that should only be created on Sundays. Then you could use [the Python `date` object's `weekday()` method](https://docs.python.org/3/library/datetime.html#datetime.date.weekday):
+```yaml
+validation_rule: "{{ created_date_object.weekday() == 6 }}"
+```
+
+Say you have documents that should be unique, i.e. only one of that document with a given correspondent, document type, storage path, etc. on a given day. You could use the `num_documents` custom Jinja filter:
+```yaml
+validation_rule: "{{ num_documents(correspondent=correspondent, document_type=document_type, storage_path=storage_path, created_date_object=created_date_object) == 1 }}"
+```
+(Note that you have to specify all of those selectors, since the `limit` filter looks at *all* documents, *not* just those that would otherwise match the current ruleset's `match` rule.)
+
+Or you can get even fancier: say you want at most one document from a particular correspondent in a given calendar week, starting on Sunday. Then we need an expression that will give us the Saturday before since the range for `created_range` is exclusive. This little one-liner does just that, using the Python `timedelta` object:
+```yaml
+{% set week_start = created_date_object - timedelta(days=(((created_date_object.weekday()+1) % 7) + 1)) %}
+
+And then the Sunday after is just 8 days later:
+```yaml
+{% set week_end = week_start + timedelta(days=8) %}
+```
+
+Putting it all together, we get a validation rule like:
+```
+validation_rule: >-
+  {% set week_start = created_date_object - timedelta(days=(((created_date_object.weekday()+1) % 7) + 1)) %}
+  {% set week_end = week_start + timedelta(days=8) %}
+  {{ num_documents(correspondent=correspondent, created_range=(week_start, week_end)) == 1}}
+```
+
+#### Exceptions
+
+Sometimes you'll want to exclude some documents from validation. To do so, you'll need to adjust the `match` rule to exclude them. It's recommended that you split up the processing and the validation, in that case. E.g. to ignore documents 123 and 456 when doing validation, this:
+```yaml
+Some rulename:
+  match: '{{ SOME_FILTER }}'
+  metadata_postprocessing:
+    some_var: '{{ SOME_POSTPROCESSING_RULE }}'
+  validation_rule: '{{ SOME_VALIDATION_RULE }}'
+```
+
+becomes this:
+```yaml
+Some rulename for postprocessing:
+  match: '{{ SOME_FILTER }}'
+  metadata_postprocessing:
+    some_var: '{{ SOME_POSTPROCESSING_RULE }}'
+---
+Some rulename for validation:
+  match: '{{ SOME_FILTER and document_id not in [123, 456] }}'
+  validation_rule: '{{ SOME_VALIDATION_RULE }}'
+```
+
+
 ## Formal ruleset definition
 
 ### Ruleset syntax
@@ -184,18 +278,21 @@ Ruleset Name:
     METADATA_FIELDNAME_1: METADATA_TEMPLATE_1
     ...
     METADATA_FIELDNAME_N: METADATA_TEMPLATE_N
+  validation_rule: VALIDATION_TEMPLATE
 ```
 where
 * `MATCH_TEMPLATE` is a Jinja template. If it evaluates to True, the ruleset will match and postprocessing will continue.
 * `metadata_regex` is optional. If specified,`REGEX` is a Python regular expression. Any named groups in `REGEX` will be saved and their values can be used in the postprocessing rules in this ruleset.
 * `metadata_postprocessing` is optional. If not specified, then paperless-ngx-postprocessor will update the document's metadata based only on the fields extract from the regular expression.
 * `METADATA_FIELDNAME_X` is the name of a metadata field to update, and `METADATA_TEMPLATE_X` is a Jinja template that will be evaluated using the metadata so far. You can have as many metadata fields as you like.
+* `validation_rule` is optional. If specified, paperless-ngx-postprocessor will evaluate the `VALIDATION_TEMPLATE` Jinja template. If it evaluates to `False` and the `INVALID_TAG` is set, then the `INVALID_TAG` will be added to the document. (If `validation_rule` is omitted, no validation check is done.)
 
 ### Available metadata:
 
 The metadata available for matching and postprocessing mostly matches [the metadata available in paperless-ngx for filename handling](https://paperless-ngx.readthedocs.io/en/latest/advanced_usage.html#file-name-handling).
 
 The following fields are read-only. They keep the same value through postprocessing as they had before postprocessing started. (If you try to overwrite them with new values, those values will be ignored.)
+* `document_id`: The document ID.
 * `correspondent`: The name of the correspondent, or `None`.
 * `document_type`: The name of the document type, or `None`.
 * `tag_list`: A list object containing the names of all tags assigned to the document.
@@ -204,6 +301,8 @@ The following fields are read-only. They keep the same value through postprocess
 * `added_year`: Year added only (as a `str`, not an `int`).
 * `added_month`: Month added only, number 01-12 (as a `str`, not an `int`).
 * `added_day`: Day added only, number 01-31 (as a `str`, not an `int`).
+* `added_date`: The date the document was added in `YYYY-MM-DD` format.
+* `added_date_object`: A Python [date object](https://docs.python.org/3/library/datetime.html#date-objects) for the date the document was added.
 
 The following fields are available for matching, and can be overwritten by values extracted from the regular expression (e.g. by using a named group with the field name) or by postprocessing rules.
 * `asn`: The archive serial number of the document, or `None`.
@@ -215,6 +314,7 @@ The following fields are available for matching, and can be overwritten by value
 The following fields are read-only, but will be updated automatically after every step by the values given in the `created_year`, `created_month`, and `created_day` fields.
 * `created`:  The full date (ISO format) the document was created.
 * `created_date`: The date the document was created in `YYYY-MM-DD` format.
+* `created_date_object`: A Python [date object](https://docs.python.org/3/library/datetime.html#date-objects) for the date the document was created.
 
 ## Configuration
 
@@ -224,6 +324,7 @@ paperless-ngx-postprocessor can be configured using the following environment va
 * `PNGX_POSTPROCESSOR_DRY_RUN=<bool>`: If set to `True`, paperless-ngx-postprocessor will not actually push any changes to paperless-ngx. (default: `False`)
 * `PNGX_POSTPROCESSOR_BACKUP=<bool or path>`: Backup file to write any changed values to. If no filename is given, one will be automatically generated based on the current date and time. If the path is a directory, the automatically generated file will be stored in that directory. (default: `False`)
 * `PNGX_POSTPROCESSOR_POSTPROCESSING_TAG=<tag name>`: A tag to apply if any changes are made during postprocessing. (default: `None`)
+* `PNGX_POSTPROCESSOR_INVALID_TAG=<tag name>`: A tag to apply if the document fails any validation rules. (default: `None`)
 * `PNGX_POSTPROCESSOR_RULESETS_DIR=<directory>`: The config directory (within the Docker container) containing the rulesets for postprocessing. (default: `/usr/src/paperless-ngx-postprocessor/rulesets.d`)
 * `PNGX_POSTPROCESSOR_PAPERLESS_API_URL=<url>`: The full URL to access the Paperless-ngx REST API (within the Docker container). (default: `http://localhost:8000/api`)
 * `PNGX_POSTPROCESSOR_PAPERLESS_SRC_DIR=<directory>`: The directory containing the source for the running instance of paperless-ngx (within the Docker container). If this is set incorrectly, postprocessor will not be able to automagically acquire the auth token. (default: `/usr/src/paperless/src`)
@@ -271,6 +372,8 @@ Note that to run the management script from the docker host, you need to provide
 ./paperlessngx_postprocessor.py --auth-token THE_AUTH_TOKEN [specific command here]
 ```
 
+You'll probably also need to specify other configuration options (like the rulesets dir and the api url), since paperless-ngx-postprocessor won't automatically read them from Paperless-ngx's `docker-compose.env` file.
+
 ### Running inside or outside the docker container
 
 Note that no matter where you run it, `paperlessngx_postprocessor.py` will try to use sensible defaults to figure out how to access the Paperless-ngx API. If you have a custom configuration, you may need to specify additional configuration options to `paperlessngx_postprocessor.py`. See [Configuration](#configuration) above for more details.
@@ -279,10 +382,10 @@ In terms of how the script works in management mode, it runs post-processing on 
 
 For example to re-run postprocessing on all documents with `correspondent` `The Bank`, you would do the following (including the auth token if running this command from the Docker host):
 ```bash
-./paperlessngx_postprocessor.py [--auth-token THE_AUTH_TOKEN] correspondent "The Bank"
+./paperlessngx_postprocessor.py [--auth-token THE_AUTH_TOKEN] [OTHER OPTIONS] process --correspondent "The Bank"
 ```
 
-You can choose all documents of a particular `correspondent` or `document_type` or `storage_path`, all documents with a specific `tag`, or just all documents (using `all`), or a specific document using its `document_id`. Note that you cannot combine selectors on the command line: e.g it's not possible to select all documents that match both a given `document_type` and `tag` simultaneously on the command line.
+You can choose all documents of a particular `correspondent`, `document_type`, `storage_path`, `tag`, and many other selectors, by `document_id`, or even all documents. For details on how to specify documents, do `./paperlessngx_postprocessor.py process --help`. Note that As of version 2.0.0, you **can** combine selectors on the command line.
 
 The command line interface supports all of the same options that you can set via the environment variables listed in the [Configuration section above](#configuration). To see how to specify them, use the command line interface's built-in help:
 ```bash
@@ -313,9 +416,17 @@ To restore backup to undo changes, do:
 
 If you want to see what the restore will do, you can open up the backup file in a text editor. Inside is just a yaml document with all of the document IDs and what their fields should be restored to.
 
-### Upgrading
+## Upgrading
 
+### Upgrading `paperless-ngx`
 If you are running paperless-ngx in a Docker container, you will need to redo [setup step two](#2-run-the-one-time-setup-script-inside-the-paperless-ngx-docker-container) after any time you upgrade paperless-ngx.
+
+### Upgrading `paperless-ngx-postprocessor`
+In the directory where you checked out `paperless-ngx-postprocessor`, just do a `git pull`
+
+#### Upgrading from v1 to v2
+- Rulesets for v2 are a superset of those for v1, so no changes should be necessary.
+- The command line interface has undergone breaking changes, so if you had any scripts that ran the management script (outside of running the standard post-consumption script), they'll need to be updated.
 
 ## FAQ
 
