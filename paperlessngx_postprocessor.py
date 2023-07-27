@@ -58,6 +58,8 @@ if __name__ == "__main__":
         sys.exit(1)
 
     if config["dry_run"]:
+        # Force at least info level, by choosing whichever level is lower, the given level or info (since more verbose is lower)
+        logger.setLevel(min(logging.getLevelName(config["verbose"]), logging.getLevelName("INFO")))
         logger.info("Doing a dry run. No changes will be made.")
 
     api = PaperlessAPI(config["paperless_api_url"],
