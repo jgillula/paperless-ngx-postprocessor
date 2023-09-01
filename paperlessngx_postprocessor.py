@@ -9,7 +9,7 @@ import os
 from paperlessngx_postprocessor import Config, PaperlessAPI, Postprocessor
 
 if __name__ == "__main__":
-    logging.basicConfig(format="[%(asctime)s] [%(levelname)s] [%(module)s] %(message)s")#, level=logging.DEBUG)
+    logging.basicConfig(format="[%(asctime)s] [%(levelname)s] [%(module)s:%(lineno)d] %(message)s")#, level=logging.DEBUG)
 
     config = Config(Config.general_options())
     

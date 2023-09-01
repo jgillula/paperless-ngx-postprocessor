@@ -43,8 +43,10 @@ class PaperlessAPI:
         
     def _get_item_by_id(self, item_type, item_id):
         if item_id:
+            self._logger.debug(f"API URL: {self._api_url}/{item_type}/{item_id}/")
             response = requests.get(f"{self._api_url}/{item_type}/{item_id}/",
                                 headers = {"Authorization": f"Token {self._auth_token}"})
+            self._logger.debug("Response: \'{}\'".format(response.text))
             if response.ok:
                 return response.json()
         return {}
