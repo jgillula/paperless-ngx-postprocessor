@@ -21,7 +21,9 @@ class DocumentRuleProcessor:
         self.name = list(spec.keys())[0]
         self._match = spec[self.name].get("match")
         self._metadata_regex = spec[self.name].get("metadata_regex")
+        #self._custom_field_regex = spec[self.name].get("custom_field_regex")
         self._metadata_postprocessing = spec[self.name].get("metadata_postprocessing")
+        #self._custom_field_postprocessing = spec[self.name].get("custom_field_postprocessing")
         self._validation_rule = spec[self.name].get("validation_rule")
         #self._title_format = spec[self.name].get("title_format")
 
@@ -182,7 +184,8 @@ class DocumentRuleProcessor:
                                    "added_year",
                                    "added_month",
                                    "added_day",
-                                   "document_id"]
+                                   "document_id",
+                                   "custom_fields"]
         read_only_metadata = {key: metadata[key] for key in read_only_metadata_keys if key in metadata}
         writable_metadata_keys = list(set(metadata.keys()) - set(read_only_metadata_keys))
         writable_metadata = {key: metadata[key] for key in writable_metadata_keys if key in metadata}
@@ -203,12 +206,47 @@ class DocumentRuleProcessor:
         if self._metadata_postprocessing is not None:
             for variable_name in self._metadata_postprocessing.keys():
                 try:
-                    old_value = writable_metadata.get(variable_name)
-                    merged_metadata = {**writable_metadata, **read_only_metadata}
-                    template = self._env.from_string(self._metadata_postprocessing[variable_name])
-                    writable_metadata[variable_name] = template.render(**merged_metadata)
-                    writable_metadata = self._normalize_created_dates(writable_metadata, metadata)
-                    self._logger.debug(f"Updating '{variable_name}' using template {self._metadata_postprocessing[variable_name]} and metadata {merged_metadata}\n: '{old_value}'->'{writable_metadata[variable_name]}'")
+                    if variable_name != 'custom_fields':
+                        old_value = writable_metadata.get(variable_name)
+                        merged_metadata = {**writable_metadata, **read_only_metadata}
+                        template = self._env.from_string(self._metadata_postprocessing[variable_name])
+                        writable_metadata[variable_name] = template.render(**merged_metadata)
+                        writable_metadata = self._normalize_created_dates(writable_metadata, metadata)
+                        self._logger.debug(f"Updating '{variable_name}' using template {self._metadata_postprocessing[variable_name]} and metadata {merged_metadata}\n: '{old_value}'->'{writable_metadata[variable_name]}'")
+                    elif variable_name == 'custom_fields':
+                        # iterate over nested entries for custom_fields (from Rule)
+                        for custom_field_role in (self._metadata_postprocessing['custom_fields']).keys():
+                            # get id of user-chosen custom_field
+                            custom_field_definition = self._api.get_custom_field_by_name(custom_field_role)
+                            
+                            # check if custom field (from Rule) even exists in metadata
+                            for custom_field_metadata in writable_metadata[variable_name]:
+                                if custom_field_metadata['field'] == custom_field_definition['id']:
+                                    search_result = custom_field_metadata
+                                else:
+                                    search_result = {}
+
+                            
+                            #search_result = ([custom_fields for custom_fields in writable_metadata[variable_name] if custom_fields["id"] == custom_field_definition['id'] ])[0]
+
+                            if len(search_result) > 0:
+                                # ok, we found a custom field with the name from the processor rule
+                                old_value = search_result
+                            else:
+                                # we did not find a custom field with the name from the processor rule - so just adding it
+                                print("huhu")
+
+                            # check old value in writeable_metadata
+                            
+                            print(old_value)
+                            # if differs: set custom_field to new template content
+
+                            # render jinja template
+                            
+                            # normalize created dates
+
+                            # logger output
+                            
                 except Exception as e:
                     self._logger.error(f"Error parsing template {self._metadata_postprocessing[variable_name]} for {variable_name} using metadata {merged_metadata}: {e}")
 
@@ -243,7 +281,7 @@ class Postprocessor:
         self._skip_validation = skip_validation
 
         self._processors = []
-    
+        
         for filename in sorted(list(self._rules_dir.glob("*.yml"))):
             if filename.is_file():
                 with open(filename, "r") as yaml_file:
@@ -254,7 +292,7 @@ class Postprocessor:
                     except Exception as e:
                         self._logger.warning(f"Unable to parse yaml in {filename}: {e}")
         self._logger.debug(f"Loaded {len(self._processors)} rules")
-
+        
         
     def _get_new_metadata_in_filename_format(self, metadata_in_filename_format, content):
         new_metadata = metadata_in_filename_format.copy()
@@ -280,10 +318,15 @@ class Postprocessor:
         backup_documents = []
         num_invalid = 0
         for document in documents:
+            # save original metadata - but in "filename format"
             metadata_in_filename_format = self._api.get_metadata_in_filename_format(document)
             self._logger.debug(f"metadata_in_filename_format={metadata_in_filename_format}")
+
+            # change existing metadata (function get_new_metadata_in_filename_format)
             new_metadata_in_filename_format = self._get_new_metadata_in_filename_format(metadata_in_filename_format, document["content"])
             self._logger.debug(f"new_metadata_in_filename_format={new_metadata_in_filename_format}")
+            
+            # 
             if len([key for key in metadata_in_filename_format.keys() if metadata_in_filename_format[key] != new_metadata_in_filename_format.get(key)]) > 0:
                 new_metadata = self._api.get_metadata_from_filename_format(new_metadata_in_filename_format)
                 # differences should be a list of keys that have changed
@@ -302,9 +345,13 @@ class Postprocessor:
                         backup_data["id"] = document["id"]
                         backup_documents.append(backup_data)                        
                 else:
-                    self._logger.info(f"No changes for document_id={document['id']}")
+                    self._logger.info(f"No metadata changes for document_id={document['id']}")
             else:
-                self._logger.info(f"No changes for document_id={document['id']}")
+                self._logger.info(f"No metadata changes for document_id={document['id']}")
+
+            # check custom_field Rules
+            
+
 
             if (not self._skip_validation) and (self._invalid_tag_id is not None):
                 # Note that we have to refetch the document here to get the changes we just applied from postprocessing

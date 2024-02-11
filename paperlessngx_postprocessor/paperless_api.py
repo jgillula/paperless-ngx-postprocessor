@@ -24,7 +24,27 @@ class PaperlessAPI:
 
         self._auth_token = auth_token
         self._cache = {}
-        self._cachable_types = ["correspondents", "document_types", "storage_paths", "tags"]
+        self._cachable_types = ["correspondents", "document_types", "storage_paths", "tags", "custom_fields"]
+        self._all_custom_fields = {}
+
+    def _get_custom_fields(self):
+        if not self._all_custom_fields:
+            item_type = "custom_fields"
+            self._all_custom_fields = self._get_list(item_type)
+        return self._all_custom_fields
+    
+    def get_custom_field_by_name(self, search_name):
+        search_result = {}
+        if not self._all_custom_fields:
+            self._get_custom_fields()
+
+        search_result = ([custom_field for custom_field in self._all_custom_fields if custom_field["name"].lower() == search_name.lower().replace("_", " ") ])[0]
+
+        if search_result:
+            return search_result
+        else:
+            self._logger.debug(f"Custom Field with name {search_name} cannot be found.")
+            return {}
 
     def delete_document_by_id(self, document_id):
         item_type = "documents"
@@ -160,6 +180,9 @@ class PaperlessAPI:
     
     def get_tag_by_id(self, tag_id):
         return self._get_item_by_id("tags", tag_id)
+    
+    def get_custom_field_by_id(self, custom_field_id):
+        return self._get_item_by_id("custom_fields", custom_field_id)
 
     def get_metadata_in_filename_format(self, metadata):
         new_metadata = {}
@@ -184,7 +207,7 @@ class PaperlessAPI:
         new_metadata["added_day"] = f"{added_date.day:02d}"
         new_metadata["added_date"] = added_date.strftime("%F")
         new_metadata["added_date_object"] = added_date
-        
+        new_metadata["custom_fields"] = metadata["custom_fields"]
         return new_metadata
 
     def get_metadata_from_filename_format(self, metadata_in_filename_format):
