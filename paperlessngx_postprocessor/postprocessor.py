@@ -184,8 +184,7 @@ class DocumentRuleProcessor:
                                    "added_year",
                                    "added_month",
                                    "added_day",
-                                   "document_id",
-                                   "custom_fields"]
+                                   "document_id"]
         read_only_metadata = {key: metadata[key] for key in read_only_metadata_keys if key in metadata}
         writable_metadata_keys = list(set(metadata.keys()) - set(read_only_metadata_keys))
         writable_metadata = {key: metadata[key] for key in writable_metadata_keys if key in metadata}
@@ -208,11 +207,6 @@ class DocumentRuleProcessor:
                 try:
                     if variable_name != 'custom_fields':
                         old_value = writable_metadata.get(variable_name)
-                        merged_metadata = {**writable_metadata, **read_only_metadata}
-                        template = self._env.from_string(self._metadata_postprocessing[variable_name])
-                        writable_metadata[variable_name] = template.render(**merged_metadata)
-                        writable_metadata = self._normalize_created_dates(writable_metadata, metadata)
-                        self._logger.debug(f"Updating '{variable_name}' using template {self._metadata_postprocessing[variable_name]} and metadata {merged_metadata}\n: '{old_value}'->'{writable_metadata[variable_name]}'")
                     elif variable_name == 'custom_fields':
                         # iterate over nested entries for custom_fields (from Rule)
                         for custom_field_role in (self._metadata_postprocessing['custom_fields']).keys():
@@ -220,33 +214,26 @@ class DocumentRuleProcessor:
                             custom_field_definition = self._api.get_custom_field_by_name(custom_field_role)
                             
                             # check if custom field (from Rule) even exists in metadata
-                            for custom_field_metadata in writable_metadata[variable_name]:
+                            old_value={}
+                            for custom_field_metadata in writable_metadata.get(variable_name):
                                 if custom_field_metadata['field'] == custom_field_definition['id']:
-                                    search_result = custom_field_metadata
-                                else:
-                                    search_result = {}
+                                    old_value = custom_field_metadata
 
-                            
-                            #search_result = ([custom_fields for custom_fields in writable_metadata[variable_name] if custom_fields["id"] == custom_field_definition['id'] ])[0]
-
-                            if len(search_result) > 0:
-                                # ok, we found a custom field with the name from the processor rule
-                                old_value = search_result
-                            else:
-                                # we did not find a custom field with the name from the processor rule - so just adding it
-                                print("huhu")
-
-                            # check old value in writeable_metadata
-                            
-                            print(old_value)
-                            # if differs: set custom_field to new template content
-
-                            # render jinja template
-                            
-                            # normalize created dates
-
-                            # logger output
-                            
+                    merged_metadata = {**writable_metadata, **read_only_metadata}
+                    
+                    if variable_name != 'custom_fields':
+                        template = self._env.from_string(self._metadata_postprocessing[variable_name])
+                        writable_metadata[variable_name] = template.render(**merged_metadata)
+                    elif variable_name == 'custom_fields':
+                        for custom_field_name in (self._metadata_postprocessing['custom_fields']).keys():
+                            for index, custom_field_metadata_iterate in enumerate(writable_metadata['custom_fields']):
+                                if custom_field_metadata_iterate['field'] == custom_field_definition['id']:
+                                    template = self._env.from_string(self._metadata_postprocessing[variable_name][custom_field_name])
+                                    writable_metadata[variable_name][index]['value'] = template.render(**merged_metadata)
+                    
+                    writable_metadata = self._normalize_created_dates(writable_metadata, metadata)
+                    self._logger.debug(f"Updating '{variable_name}' using template {self._metadata_postprocessing[variable_name]} and metadata {merged_metadata}\n: '{old_value}'->'{writable_metadata[variable_name]}'")
+                    
                 except Exception as e:
                     self._logger.error(f"Error parsing template {self._metadata_postprocessing[variable_name]} for {variable_name} using metadata {merged_metadata}: {e}")
 

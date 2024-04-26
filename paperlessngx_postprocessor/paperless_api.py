@@ -222,6 +222,7 @@ class PaperlessAPI:
         result["created"] = metadata_in_filename_format["created"]
         result["created_date"] = dateutil.parser.isoparse(metadata_in_filename_format["created"]).strftime("%F")
         result["added"] = metadata_in_filename_format["added"]
+        result["custom_fields"] = metadata_in_filename_format["custom_fields"]
         
         return result
         
