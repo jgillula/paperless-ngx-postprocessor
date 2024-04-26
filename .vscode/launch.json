@@ -1,0 +1,29 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+
+        {
+            "name": "Python Debugger: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "paperlessngx_postprocessor.py",
+            "console": "integratedTerminal",
+            "args": [ 
+                "--verbose",
+                "DEBUG",
+                "--auth-token", 
+                "<your auth token>", 
+                "--paperless-api-url", 
+                "https://<your paperless fqdn>/api", 
+                "--rulesets-dir", 
+                "<path to ruleset.d>", 
+                "process", 
+                "--document-id",
+                "79"
+            ]
+        }
+    ]
+}
