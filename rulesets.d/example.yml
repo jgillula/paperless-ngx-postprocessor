@@ -28,8 +28,10 @@ Parse creation date from filename:
 ---
 Ruleset for Custom Field:
   match: True
-  match_regex: "eingegangen (?P<entry_day>\d{1,2}).(?P<entry_month>\d{1,2}).(?P<entry_year>\d{4})"
+  metadata_regex: 'eingegangen (?P<entry_day>\d{1,2}).(?P<entry_month>\d{1,2}).(?P<entry_year>\d{4})'
   metadata_postprocessing:
+    # completly not right - just for testing purposes
+    title: "huhu"
     custom_fields:
       eingegangen: '{{ entry_year }}-{{ entry_month }}-{{ entry_day }}'
 ---
