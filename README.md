@@ -136,7 +136,7 @@ These can be used like this:
 ```
 {{ variable | custom_filter("parameter") }}
 ```
-See [rulesets.d/example.yml](rulesets.d/example.yml) for examples of how to use these filters.
+See [ruleset-example.yml](ruleset-example.yml) for examples of how to use these filters.
 
 ### Combining rulesets
 
