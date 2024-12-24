@@ -2,6 +2,8 @@ import dateutil.parser
 import logging
 import os
 import requests
+import copy
+import json
 from datetime import date
 from pathlib import Path
 
@@ -24,27 +26,7 @@ class PaperlessAPI:
 
         self._auth_token = auth_token
         self._cache = {}
-        self._cachable_types = ["correspondents", "document_types", "storage_paths", "tags", "custom_fields"]
-        self._all_custom_fields = {}
-
-    def _get_custom_fields(self):
-        if not self._all_custom_fields:
-            item_type = "custom_fields"
-            self._all_custom_fields = self._get_list(item_type)
-        return self._all_custom_fields
-    
-    def get_custom_field_by_name(self, search_name):
-        search_result = {}
-        if not self._all_custom_fields:
-            self._get_custom_fields()
-
-        search_result = ([custom_field for custom_field in self._all_custom_fields if custom_field["name"].lower() == search_name.lower().replace("_", " ") ])[0]
-
-        if search_result:
-            return search_result
-        else:
-            self._logger.debug(f"Custom Field with name {search_name} cannot be found.")
-            return {}
+        self._cachable_types = ["correspondents", "document_types", "storage_paths", "tags"]
 
     def delete_document_by_id(self, document_id):
         item_type = "documents"
@@ -103,8 +85,8 @@ class PaperlessAPI:
 
     def patch_document(self, document_id, data):
         return requests.patch(f"{self._api_url}/documents/{document_id}/",
-                              headers = {"Authorization": f"Token {self._auth_token}"},
-                              data = data)
+                              headers = {"Authorization": f"Token {self._auth_token}", 'Content-type': "application/json" },
+                              json = data)
 
     def get_documents_by_selector_name(self, selector, name):
         # We add the 's' to the selector to turn 'correspondent' into 'correspondents', etc.
@@ -127,6 +109,7 @@ class PaperlessAPI:
                           "created_year": "created__year",
                           "created_month": "created__month",
                           "created_day": "created__day",
+                          "custom_fields": "custom_fields"
         }
 
         queries = []
@@ -180,9 +163,6 @@ class PaperlessAPI:
     
     def get_tag_by_id(self, tag_id):
         return self._get_item_by_id("tags", tag_id)
-    
-    def get_custom_field_by_id(self, custom_field_id):
-        return self._get_item_by_id("custom_fields", custom_field_id)
 
     def get_metadata_in_filename_format(self, metadata):
         new_metadata = {}
@@ -208,6 +188,7 @@ class PaperlessAPI:
         new_metadata["added_date"] = added_date.strftime("%F")
         new_metadata["added_date_object"] = added_date
         new_metadata["custom_fields"] = metadata["custom_fields"]
+        
         return new_metadata
 
     def get_metadata_from_filename_format(self, metadata_in_filename_format):
@@ -242,5 +223,24 @@ class PaperlessAPI:
             result["DOCUMENT_ARCHIVE_PATH"] = None
         result["DOCUMENT_CORRESPONDENT"] = self.get_correspondent_by_id(document.get("correspondent")).get("name")
         result["DOCUMENT_TAGS"] = ",".join([self.get_tag_by_id(tag_id).get("name") for tag_id in document.get("tags")])
+
+        return result
+
+    def get_customfield_from_name(self, customfield_name):
+        result = {}
+
+        # rework underscore's into url spaces
+        url_reworked_customfield_name = customfield_name.replace("_","%20")
+
+        response = requests.get(f"{self._api_url}/custom_fields/?name__icontains={url_reworked_customfield_name}", headers = {"Authorization": f"Token {self._auth_token}"})
+
+        if len(response.json().get("results")) > 1:
+            self._logger.error("Found more than one custom_field with specified name in filter. Name has to be unique.")
+        elif len(response.json().get("results")) == 0:
+            self._logger.error("Found no custom fields with this name.")
+        else:
+            self._logger.debug(f"Found custom_field: \"{response.json().get('results')[0].get('name')}\" with id {response.json().get('results')[0].get('id')}. Building custom_fields object definition.")
+
+        result = copy.deepcopy(response.json().get("results")[0])
 
         return result
