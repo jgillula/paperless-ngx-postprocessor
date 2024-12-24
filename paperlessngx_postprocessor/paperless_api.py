@@ -3,7 +3,6 @@ import logging
 import os
 import requests
 import copy
-import json
 from datetime import date
 from pathlib import Path
 
