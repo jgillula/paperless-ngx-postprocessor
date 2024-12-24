@@ -6,7 +6,7 @@
     "configurations": [
 
         {
-            "name": "Python Debugger: Current File",
+            "name": "Python Debugger: Debug Processing",
             "type": "debugpy",
             "request": "launch",
             "program": "paperlessngx_postprocessor.py",
