@@ -216,7 +216,7 @@ class DocumentRuleProcessor:
 
                 elif variable_name == 'custom_fields':
                     for custom_field_name in (self._metadata_postprocessing["custom_fields"]).keys():
-                        #try:
+                        try:
                             # 1. get custom_field id for yaml key
                             custom_field_object_definition = self._api.get_customfield_from_name(custom_field_name)
                             self._logger.debug(f"CF Object: {custom_field_object_definition}")
@@ -248,18 +248,16 @@ class DocumentRuleProcessor:
                             
                             if not custom_field_matched:
                                 # hm, seems we did not find the custom_field in the loop. Then we have to add it.
+                                merged_metadata = {**writable_metadata, **read_only_metadata}
                                 new_dict = { 'field': custom_field_object_definition.get('id') , 'value': template.render(**merged_metadata) }
                                 writable_metadata["custom_fields"].append(new_dict)
                                 self._logger.debug(f"New custom_fields Object. Content:  {new_dict}")
                             
-                            self._logger.debug("##############################")
-                            self._logger.debug(writable_metadata)
-                            
                             writable_metadata = self._normalize_created_dates(writable_metadata, metadata)
                             self._logger.debug(f"Updating custom_field '{custom_field_name}' using template {self._metadata_postprocessing['custom_fields'][custom_field_name]} and metadata {merged_metadata}\n: '{old_value}'->'{writable_metadata['custom_fields']}'")
 
-                        #except Exception as e:
-                        #    self._logger.error(f"Error parsing template {self._metadata_postprocessing['custom_fields'][custom_field_name]} for {custom_field_name} using metadata {merged_metadata}: {e}")
+                        except Exception as e:
+                            self._logger.error(f"Error parsing template {self._metadata_postprocessing['custom_fields'][custom_field_name]} for {custom_field_name} using metadata {merged_metadata}: {e}")
         else:
             self._logger.debug(f"No postprocessing rules found for rule {self.name}")
 
