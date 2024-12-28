@@ -96,6 +96,15 @@ class Config:
                 "paperless_src_dir": Config.OptionSpec("/usr/src/paperless/src", {"metavar": "PAPERLESS_SRC_DIR",
                                                                                   "type": str,
                                                                                   "help": "The directory containing the source for the running instance of paperless. If this is set incorrectly, postprocessor will not be able to automagically acquire the AUTH_TOKEN. (default: {default})"}),
+                "ai_usage": Config.OptionSpec("NONE", {"type": str,
+                                                       "metavar": "AI_USAGE",
+                                                         "choices": ["OLLAMA"],
+                                                         #"choices": ["OLLAMA", "OPENAI"],
+                                                         "help": "Choose wether you want to make use of now only Ollama is available. Please make sure, that Ollama is up and running and that the Environment Variable OLLAMA_HOST has been set with the proper url.(default: {default})"}),
+                "ollama_model": Config.OptionSpec("gemma2", {"type": str,
+                                                            "metavar": "OLLAMA_MODEL",
+                                                            "type": str,
+                                                            "help": "Choose which Ollama Model you want to use. Please be aware, that the Environment Variable PNGX_POSTPROCESSOR_AI_USAGE as well as the Environment Variable OLLAMA_HOST needs to be set in order for this to work. (default: {default})"}),
         }
 
     def __init__(self, options_spec, use_environment_variables = True):

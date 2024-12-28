@@ -10,17 +10,19 @@ from pathlib import Path
 from .paperless_api import PaperlessAPI
 
 class DocumentRuleProcessor:
-    def __init__(self, api, spec, logger = None):
+    def __init__(self, api, spec, logger = None, ai = None):
         self._logger = logger
         if self._logger is None:
             logging.basicConfig(format="[%(asctime)s] [%(levelname)s] [%(module)s] %(message)s", level="CRITICAL")
             self._logger = logging.getLogger()
 
         self._api = api
+        self._ai = ai
 
         self.name = list(spec.keys())[0]
         self._match = spec[self.name].get("match")
         self._metadata_regex = spec[self.name].get("metadata_regex")
+        self._prompts = spec[self.name].get("prompts")
         self._metadata_postprocessing = spec[self.name].get("metadata_postprocessing")
         self._validation_rule = spec[self.name].get("validation_rule")
         #self._title_format = spec[self.name].get("title_format")
@@ -205,6 +207,13 @@ class DocumentRuleProcessor:
                 try:
                     old_value = writable_metadata.get(variable_name)
                     merged_metadata = {**writable_metadata, **read_only_metadata}
+
+                    ####Breakout for replacement with Ollama suggestion if needed
+                    for prompt in self._prompts.keys():
+                        if(prompt in self._metadata_postprocessing[variable_name]):
+                            self._metadata_postprocessing[variable_name] = self._metadata_postprocessing[variable_name].replace("{{" + prompt + "}}", self._ai.getResponse(content, self._prompts[prompt]))
+                    ####End of Breakout
+
                     template = self._env.from_string(self._metadata_postprocessing[variable_name])
                     writable_metadata[variable_name] = template.render(**merged_metadata)
                     writable_metadata = self._normalize_created_dates(writable_metadata, metadata)
@@ -217,10 +226,8 @@ class DocumentRuleProcessor:
 
         return {**writable_metadata, **read_only_metadata}
 
-
-
 class Postprocessor:
-    def __init__(self, api, rules_dir, postprocessing_tag = None, invalid_tag = None, dry_run = False, skip_validation = False, logger = None):
+    def __init__(self, api, rules_dir, postprocessing_tag = None, invalid_tag = None, dry_run = False, skip_validation = False, logger = None, ai = None):
         self._logger = logger
         if self._logger is None:
             logging.basicConfig(format="[%(asctime)s] [%(levelname)s] [%(module)s] %(message)s", level="CRITICAL")
@@ -250,7 +257,7 @@ class Postprocessor:
                     try:
                         yaml_documents = yaml.safe_load_all(yaml_file)
                         for yaml_document in yaml_documents:
-                            self._processors.append(DocumentRuleProcessor(self._api, yaml_document, self._logger))
+                            self._processors.append(DocumentRuleProcessor(self._api, yaml_document, self._logger, ai))
                     except Exception as e:
                         self._logger.warning(f"Unable to parse yaml in {filename}: {e}")
         self._logger.debug(f"Loaded {len(self._processors)} rules")

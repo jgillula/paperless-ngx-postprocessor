@@ -7,6 +7,7 @@ import yaml
 import os
 
 from paperlessngx_postprocessor import Config, PaperlessAPI, Postprocessor
+from paperlessngx_postprocessor.ai import AI
 
 if __name__ == "__main__":
     logging.basicConfig(format="[%(asctime)s] [%(levelname)s] [%(module)s] %(message)s")#, level=logging.DEBUG)
@@ -47,6 +48,21 @@ if __name__ == "__main__":
     logger.setLevel(config["verbose"])
     logger.debug(f"Running {sys.argv[0]} with config {config} and {selector_config}")
 
+    #Check wether AI should be used an if it is configured correctly
+    #As of now only OLLAMA is supported. This means anything else then OLLAMA is ignored.
+    if(config["ai_usage"]=="OLLAMA"):
+        #If OLLAMA is chosen the environment variable OS_HOST needs to be set in order to access the OLLAMA Server and the model needs to be selected
+        if(os.environ['OLLAMA_HOST'] and config["ollama_model"]):
+            #If the OLLAMA Host is set, then the connection is tested an the model is loaded in order to reduce access time
+            ai = AI(config["ollama_model"], logger)
+            if not ai.selfCheck():
+                logger.critical("Something is not correct in the config of the AI. Please read the docs to find out the problem. You need all environment variables properly placed and the ai server must be reachable.")
+                config["ai_usage"]="NONE"
+    else:
+        logger.critical("Something is not correct in the config of the AI. Please read the docs to find out the problem. You need all environment variables properly placed and the ai server must be reachable.")
+        config["ai_usage"]="NONE"
+
+
     # if config["selector"] != "all" and config["item_id_or_name"] is None:
     #     if config["selector"] == "restore":
     #         logging.error(f"A filename is required to backup from.")
@@ -72,7 +88,8 @@ if __name__ == "__main__":
                                   invalid_tag = config["invalid_tag"],
                                   dry_run = config["dry_run"],
                                   skip_validation = config["skip_validation"],
-                                  logger=logger)
+                                  logger=logger,
+                                  ai=ai)
     
     documents = []
     if config["mode"] == "restore":
