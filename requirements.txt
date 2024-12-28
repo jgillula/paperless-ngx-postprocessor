@@ -4,3 +4,4 @@ python-dateutil
 PyYAML
 regex
 requests
+ollama
