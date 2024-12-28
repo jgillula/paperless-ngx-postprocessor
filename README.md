@@ -8,6 +8,7 @@ paperless-ngx-postprocessor allows you to automatically set titles, ASNs, and cr
 * Setup rulesets to choose which documents are postprocessed and which are ignored, based on metadata like correspondent, document_type, storage_path, tags, and more
 * For each ruleset, extract metadata using [Python regular expressions](https://docs.python.org/3/library/re.html#regular-expression-syntax)
 * Use [Jinja templates](https://jinja.palletsprojects.com/en/3.1.x/templates/) to specify new values for archive serial number, title, and created date, using the values from your regular expression
+* Instead of Jinja values, you are now also able to use an AI (for now only Ollama) to generate new values
 * Optionally use [Jinja templates](https://jinja.palletsprojects.com/en/3.1.x/templates/) to validate document metadata, and add a tag to documents that have invalid metadata (e.g. to catch parsing errors)
 * Optionally apply a tag to documents that are changed during postprocessing, so you can keep track of which documents have changed
 * Optionally make backups of changes, so you can restore document metadata back to the way it was before postprocessing
@@ -39,6 +40,14 @@ e.g. I might have
 Next open `docker-compose.env` and add the following line:
 ```bash
 PAPERLESS_POST_CONSUME_SCRIPT=/usr/src/paperless-ngx-postprocessor/post_consume_script.sh
+```
+
+If you want to use AI (For now only Ollama)
+
+```bash
+PNGX_POSTPROCESSOR_AI_USAGE=OLLAMA
+PNGX_POSTPROCESSOR_OLLAMA_MODEL=AnyModelYouWish
+OLLAMA_HOST=http://<IPAdressAndPortOfYourOllamaServer>
 ```
 
 Now recreate and start paperless-ngx by running
@@ -329,6 +338,9 @@ paperless-ngx-postprocessor can be configured using the following environment va
 * `PNGX_POSTPROCESSOR_PAPERLESS_API_URL=<url>`: The full URL to access the Paperless-ngx REST API (within the Docker container). (default: `http://localhost:8000/api`)
 * `PNGX_POSTPROCESSOR_PAPERLESS_SRC_DIR=<directory>`: The directory containing the source for the running instance of paperless-ngx (within the Docker container). If this is set incorrectly, postprocessor will not be able to automagically acquire the auth token. (default: `/usr/src/paperless/src`)
 * `PNGX_POSTPROCESSOR_POST_CONSUME_SCRIPT=<full path to script>`: A post-consumption script to run *after* paperless-ngx-postprocessor is done. All of the environment variables and parameters will be as described in [paperless-ngx's documentation](https://paperless-ngx.readthedocs.io/en/latest/advanced_usage.html#hooking-into-the-consumption-process) (except the values will reflect any new values updated during postprocessing).
+* `PNGX_POSTPROCESSOR_AI_USAGE=OLLAMA`: Choose wether you want to make use of now only Ollama is available. Please make sure, that Ollama is up and running and that the Environment Variable OLLAMA_HOST has been set with the proper url.(Possible Options are: NONE, OLLAMA; default:NONE)"}),
+* `PNGX_POSTPROCESSOR_OLLAMA_MODEL`: Choose which Ollama Model you want to use. Please be aware, that the Environment Variable PNGX_POSTPROCESSOR_AI_USAGE as well as the Environment Variable OLLAMA_HOST needs to be set in order for this to work. (Accepts every valid Model; default:gemma2)
+* `OLLAMA_HOST`: URL to your Ollama Server including the Port. For example http://192.168.15:100:11434
 
 ## Management
 
