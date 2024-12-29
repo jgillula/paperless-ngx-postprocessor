@@ -209,9 +209,10 @@ class DocumentRuleProcessor:
                     merged_metadata = {**writable_metadata, **read_only_metadata}
 
                     ####Breakout for replacement with Ollama suggestion if needed
-                    for prompt in self._prompts.keys():
-                        if(prompt in self._metadata_postprocessing[variable_name]):
-                            self._metadata_postprocessing[variable_name] = self._metadata_postprocessing[variable_name].replace("{{" + prompt + "}}", self._ai.getResponse(content, self._prompts[prompt]))
+                    if self._ai is not None and self._prompts is not None:
+                        for prompt in self._prompts.keys():
+                            if(prompt in self._metadata_postprocessing[variable_name]):
+                                self._metadata_postprocessing[variable_name] = self._metadata_postprocessing[variable_name].replace("{{" + prompt + "}}", self._ai.getResponse(content, self._prompts[prompt]))
                     ####End of Breakout
 
                     template = self._env.from_string(self._metadata_postprocessing[variable_name])

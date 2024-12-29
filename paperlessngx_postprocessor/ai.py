@@ -17,7 +17,6 @@ class AI:
             After that I will send you the instruction which information you need to extract.\
             Be Short and concise and answer without any other additional information and without control characters. \
             Correct spelling or other errors in your answer. Return the info in JSON format. '
-
     def getResponse(self, content, prompt):
         messages = [
         {
@@ -62,14 +61,14 @@ class AI:
         self._logger.info("It took me " + str(duration) + " to load the model")
 
         response: ProcessResponse = ps()
-        for model in response.models:
-            self._logger.info('Model: ', model.model)
-            self._logger.info('  Digest: ', model.digest)
-            self._logger.info('  Expires at: ', model.expires_at)
-            self._logger.info('  Size: ', model.size)
-            self._logger.info('  Size vram: ', model.size_vram)
-            self._logger.info('  Details: ', model.details)
-            self._logger.info('\n')
+ #       for model in response.models:
+ #           self._logger.info('Model: ', str(model.model))
+ #           self._logger.info('  Digest: ', str(model.digest))
+ #           self._logger.info('  Expires at: ', str(model.expires_at))
+ #           self._logger.info('  Size: ', str(model.size))
+ #           self._logger.info('  Size vram: ', str(model.size_vram))
+ #           self._logger.info('  Details: ', str(model.details))
+ #           self._logger.info('\n')
             
         start = datetime.now()
 

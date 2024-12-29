@@ -57,10 +57,10 @@ if __name__ == "__main__":
             ai = AI(config["ollama_model"], logger)
             if not ai.selfCheck():
                 logger.critical("Something is not correct in the config of the AI. Please read the docs to find out the problem. You need all environment variables properly placed and the ai server must be reachable.")
-                config["ai_usage"]="NONE"
+                ai = None
     else:
         logger.critical("Something is not correct in the config of the AI. Please read the docs to find out the problem. You need all environment variables properly placed and the ai server must be reachable.")
-        config["ai_usage"]="NONE"
+        ai = None
 
 
     # if config["selector"] != "all" and config["item_id_or_name"] is None:
