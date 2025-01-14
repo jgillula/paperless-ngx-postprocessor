@@ -25,3 +25,20 @@ Parse creation date from filename:
     created_month: '{{ title_old | regex_sub("^(?P<created_year>\d{4})-(?P<created_month>\d{2})-(?P<created_day>\d{2}) (?P<title>.*)$", "\g<created_month>") }}'
     created_day:   '{{ title_old | regex_sub("^(?P<created_year>\d{4})-(?P<created_month>\d{2})-(?P<created_day>\d{2}) (?P<title>.*)$", "\g<created_day>") }}'
   validation_rule: '{{ num_documents(correspondent=correspondent, document_type=document_type, created_date_object=created_date_object) == 1 }}'
+
+---
+# Addition for custom_fields
+# this is just an example from the contributor hasechris - he wants to fill a custom_field based on a handwritten note on the scanned document.
+#
+# this filter gets the handwritten "received" date and adds/updates the custom_field with name "received" (you have to create the custom_fields first in paperless-ngx)
+#
+# IMPORTANT: everything has to be specified as text in yaml - I think the template renderer cant work with something else
+# 2. IMPORTANT: The custom_field type "Document links" is not supported atm.
+custom_field_received:
+  match: True
+  metadata_regex: '(received )(?P<received_day>\d{2})\.(?P<received_month>\d{2})\.(?P<received_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      received: "{{ received_year }}-{{ received_month }}-{{ received_day }}"
+      test_with_spaces: "True"
+

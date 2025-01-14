@@ -4,6 +4,7 @@ import jinja2
 import logging
 import regex
 import yaml
+import copy
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -138,7 +139,7 @@ class DocumentRuleProcessor:
         return regex.sub(pattern, repl, string)
     
     def _normalize_created_dates(self, new_metadata, old_metadata):
-        result = new_metadata.copy()
+        result = copy.deepcopy(new_metadata)
         try:
             result["created_year"] = str(int(new_metadata["created_year"]))
         except:
@@ -202,16 +203,62 @@ class DocumentRuleProcessor:
         # Cycle throguh the postprocessing rules
         if self._metadata_postprocessing is not None:
             for variable_name in self._metadata_postprocessing.keys():
-                try:
-                    old_value = writable_metadata.get(variable_name)
-                    merged_metadata = {**writable_metadata, **read_only_metadata}
-                    template = self._env.from_string(self._metadata_postprocessing[variable_name])
-                    writable_metadata[variable_name] = template.render(**merged_metadata)
-                    writable_metadata = self._normalize_created_dates(writable_metadata, metadata)
-                    self._logger.debug(f"Updating '{variable_name}' using template {self._metadata_postprocessing[variable_name]} and metadata {merged_metadata}\n: '{old_value}'->'{writable_metadata[variable_name]}'")
-                except Exception as e:
-                    self._logger.error(f"Error parsing template {self._metadata_postprocessing[variable_name]} for {variable_name} using metadata {merged_metadata}: {e}")
+                if variable_name != 'custom_fields':
+                    try:
+                        old_value = writable_metadata.get(variable_name)
+                        merged_metadata = {**writable_metadata, **read_only_metadata}    
+                        template = self._env.from_string(self._metadata_postprocessing[variable_name])
+                        writable_metadata[variable_name] = template.render(**merged_metadata)
+                        writable_metadata = self._normalize_created_dates(writable_metadata, metadata)
+                        self._logger.debug(f"Updating '{variable_name}' using template {self._metadata_postprocessing[variable_name]} and metadata {merged_metadata}\n: '{old_value}'->'{writable_metadata[variable_name]}'")
+                    except Exception as e:
+                        self._logger.error(f"Error parsing template {self._metadata_postprocessing[variable_name]} for {variable_name} using metadata {merged_metadata}: {e}")
 
+                elif variable_name == 'custom_fields':
+                    for custom_field_name in (self._metadata_postprocessing["custom_fields"]).keys():
+                        try:
+                            # 1. get custom_field id for yaml key
+                            custom_field_object_definition = self._api.get_customfield_from_name(custom_field_name)
+                            self._logger.debug(f"CF Object: {custom_field_object_definition}")
+
+                            #del old_value
+
+                            # 2. get old value
+                            custom_field_matched = False
+                            for custom_field_object in writable_metadata["custom_fields"]:
+                                if custom_field_object['field'] == custom_field_object_definition.get('id'):
+                                    custom_field_matched = True
+                                    old_value = custom_field_object.get('value')
+                                    self._logger.debug(f"Old Value: {old_value}")
+                            
+                            if not custom_field_matched:
+                                # hm, seems we did not find the custom_field in the loop. Then we have to add it.
+                                old_value = "Null"
+                                self._logger.debug("Old Value: Null")
+                            
+                            # 3. set template render string to value from custom_field yaml key
+                            template = self._env.from_string(self._metadata_postprocessing["custom_fields"][custom_field_name])
+                            
+                            # test if custom_field object already exists (so determine if adding or changing)
+                            custom_field_matched = False
+                            for custom_field_object in writable_metadata["custom_fields"]:
+                                if custom_field_object.get('field') == custom_field_object_definition.get('id'):
+                                    custom_field_matched = True
+                                    merged_metadata = {**writable_metadata, **read_only_metadata}
+                                    custom_field_object["value"] = template.render(**merged_metadata)
+                            
+                            if not custom_field_matched:
+                                # hm, seems we did not find the custom_field in the loop. Then we have to add it.
+                                merged_metadata = {**writable_metadata, **read_only_metadata}
+                                new_dict = { 'field': custom_field_object_definition.get('id') , 'value': template.render(**merged_metadata) }
+                                writable_metadata["custom_fields"].append(new_dict)
+                                self._logger.debug(f"New custom_fields Object. Content:  {new_dict}")
+                            
+                            writable_metadata = self._normalize_created_dates(writable_metadata, metadata)
+                            self._logger.debug(f"Updating custom_field '{custom_field_name}' using template {self._metadata_postprocessing['custom_fields'][custom_field_name]} and metadata {merged_metadata}\n: '{old_value}'->'{writable_metadata['custom_fields']}'")
+
+                        except Exception as e:
+                            self._logger.error(f"Error parsing template {self._metadata_postprocessing['custom_fields'][custom_field_name]} for {custom_field_name} using metadata {merged_metadata}: {e}")
         else:
             self._logger.debug(f"No postprocessing rules found for rule {self.name}")
 
@@ -243,7 +290,7 @@ class Postprocessor:
         self._skip_validation = skip_validation
 
         self._processors = []
-    
+        
         for filename in sorted(list(self._rules_dir.glob("*.yml"))):
             if filename.is_file():
                 with open(filename, "r") as yaml_file:
@@ -253,11 +300,14 @@ class Postprocessor:
                             self._processors.append(DocumentRuleProcessor(self._api, yaml_document, self._logger))
                     except Exception as e:
                         self._logger.warning(f"Unable to parse yaml in {filename}: {e}")
+        if len(self._processors) > 0:
+            for processor in self._processors:
+                self._logger.debug(f"Rule: {processor.__dict__}")
         self._logger.debug(f"Loaded {len(self._processors)} rules")
-
+        
         
     def _get_new_metadata_in_filename_format(self, metadata_in_filename_format, content):
-        new_metadata = metadata_in_filename_format.copy()
+        new_metadata = copy.deepcopy(metadata_in_filename_format)
         
         for processor in self._processors:
             if processor.matches(metadata_in_filename_format):
