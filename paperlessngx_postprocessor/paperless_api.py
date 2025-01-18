@@ -108,7 +108,7 @@ class PaperlessAPI:
                           "created_year": "created__year",
                           "created_month": "created__month",
                           "created_day": "created__day",
-                          "tag": "tags__name__iexact",
+                          "tag": "tags__name__istartswith",
                           "custom_fields": "custom_fields"
         }
 

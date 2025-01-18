@@ -205,22 +205,26 @@ class DocumentRuleProcessor:
         # Cycle throguh the postprocessing rules
         if self._metadata_postprocessing is not None:
             for variable_name in self._metadata_postprocessing.keys():
+                old_value = writable_metadata.get(variable_name)
+                merged_metadata = {**writable_metadata, **read_only_metadata}
                 if variable_name != 'custom_fields':
                     try:
-                        old_value = writable_metadata.get(variable_name)
-                        merged_metadata = {**writable_metadata, **read_only_metadata}
-
+                        org = self._metadata_postprocessing[variable_name]
+                        new = org
                         ####Breakout for replacement with Ollama suggestion if needed
                         if self._ai is not None and self._prompts is not None:
                             for prompt in self._prompts.keys():
                                 if(prompt in self._metadata_postprocessing[variable_name]):
-                                    self._metadata_postprocessing[variable_name] = self._metadata_postprocessing[variable_name].replace("{{" + prompt + "}}", self._ai.getResponse(content, self._prompts[prompt]))
+                                    response = self._ai.getResponse(content, self._prompts[prompt])
+                                    new = new.replace("<<" + prompt + ">>", response)
+                            self._metadata_postprocessing[variable_name] = new
                         ####End of Breakout
 
                         template = self._env.from_string(self._metadata_postprocessing[variable_name])
                         writable_metadata[variable_name] = template.render(**merged_metadata)
                         writable_metadata = self._normalize_created_dates(writable_metadata, metadata)
                         self._logger.debug(f"Updating '{variable_name}' using template {self._metadata_postprocessing[variable_name]} and metadata {merged_metadata}\n: '{old_value}'->'{writable_metadata[variable_name]}'")
+                        self._metadata_postprocessing[variable_name] = org
                     except Exception as e:
                         self._logger.error(f"Error parsing template {self._metadata_postprocessing[variable_name]} for {variable_name} using metadata {merged_metadata}: {e}")
                         
@@ -247,21 +251,43 @@ class DocumentRuleProcessor:
                                 self._logger.debug("Old Value: Null")
 
                             # 3. set template render string to value from custom_field yaml key
+
                             template = self._env.from_string(self._metadata_postprocessing["custom_fields"][custom_field_name])
 
                             # test if custom_field object already exists (so determine if adding or changing)
                             custom_field_matched = False
+                            newValue = template.render(**merged_metadata)
+                             ####Breakout for replacement with Ollama suggestion if needed
+                            if self._ai is not None and self._prompts is not None:
+                                for prompt in self._prompts.keys():
+                                    if(prompt in self._metadata_postprocessing["custom_fields"][custom_field_name]):
+                                        aiResponse = self._ai.getResponse(content, self._prompts[prompt])
+                                        newValue = newValue.replace("<<" + prompt + ">>", aiResponse)
+                                        newValue = ""
+                            ####End of Breakout
                             for custom_field_object in writable_metadata["custom_fields"]:
                                 if custom_field_object.get('field') == custom_field_object_definition.get('id'):
                                     custom_field_matched = True
-                                    custom_field_object["value"] = template.render(**merged_metadata)
+                                    if(newValue.__class__.__name__==custom_field_object_definition.get('id').data_type):
+                                        custom_field_object["value"] = newValue
+                                    #custom_field_object["value"] = template.render(**merged_metadata)
 
                             if not custom_field_matched:
                                 # hm, seems we did not find the custom_field in the loop. Then we have to add it.
                                 merged_metadata = {**writable_metadata, **read_only_metadata}
-                                new_dict = { 'field': custom_field_object_definition.get('id') , 'value': template.render(**merged_metadata) }
-                                writable_metadata["custom_fields"].append(new_dict)
-                                self._logger.debug(f"New custom_fields Object. Content:  {new_dict}")
+                                data_type = custom_field_object_definition.get('data_type')
+                                try:
+                                    match data_type:
+                                        case 'float':
+                                            newValue = float(newValue)
+                                        case 'integer':
+                                            newValue = int(newValue)
+                                    new_dict = { 'field': custom_field_object_definition.get('id') , 'value': newValue }
+                                    writable_metadata["custom_fields"].append(new_dict)
+                                    newValue = ""
+                                    self._logger.debug(f"New custom_fields Object. Content:  {new_dict}")
+                                except Exception as e:
+                                    self._logger.error(f"Error parsing datatype : {e}")
 
                             writable_metadata = self._normalize_created_dates(writable_metadata, metadata)
                             self._logger.debug(f"Updating custom_field '{custom_field_name}' using template {self._metadata_postprocessing['custom_fields'][custom_field_name]} and metadata {merged_metadata}\n: '{old_value}'->'{writable_metadata['custom_fields']}'")
