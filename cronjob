@@ -1,0 +1,1 @@
+* * * * * /usr/src/paperless/scripts/cronjobscript.sh > /usr/src/paperless/scripts/log.txt 2>&1
