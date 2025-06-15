@@ -25,28 +25,38 @@ class PaperlessAPI:
         self._auth_token = auth_token
         self._cache = {}
         self._cachable_types = ["correspondents", "document_types", "storage_paths", "tags"]
+        self._paperless_api_version = 3
+
+        self._common_headers = {"Authorization": f"Token {self._auth_token}",
+                                "Accept": f"application/json; version={self._paperless_api_version}"}
 
     def delete_document_by_id(self, document_id):
         item_type = "documents"
         item_id = document_id
         response = requests.delete(f"{self._api_url}/{item_type}/{item_id}/",
-                                   headers = {"Authorization": f"Token {self._auth_token}"})
+                                   headers = self._common_headers)
         return response.ok
 
     def get_document_metadata_by_id(self, document_id):
         response = requests.get(f"{self._api_url}/documents/{document_id}/metadata/",
-                                headers = {"Authorization": f"Token {self._auth_token}"})
+                                headers = self._common_headers)
         if response.ok:
             return response.json()
         else:
+            self._log_request_error(response)
             return {}
-        
+
+    def _log_request_error(self, response):
+        self._logger.warning(f"Error {response.status_code} {response.reason} at {response.request.method} {response.url}: {response.text}")
+        self._logger.debug(f"    Response headers: {response.headers}")
+
     def _get_item_by_id(self, item_type, item_id):
         if item_id:
             response = requests.get(f"{self._api_url}/{item_type}/{item_id}/",
-                                headers = {"Authorization": f"Token {self._auth_token}"})
+                                    headers = self._common_headers)
             if response.ok:
                 return response.json()
+            self._log_request_error(response)
         return {}
 
     def _get_list(self, item_type, query=None):
@@ -61,7 +71,7 @@ class PaperlessAPI:
             next_url += f"?{query}"
         while next_url is not None:
             response = requests.get(next_url,
-                                    headers = {"Authorization": f"Token {self._auth_token}"})
+                                    headers = self._common_headers)
             if response.ok:
                 response_json = response.json()
                 items.extend(response_json.get("results"))
@@ -82,9 +92,12 @@ class PaperlessAPI:
         return None
 
     def patch_document(self, document_id, data):
-        return requests.patch(f"{self._api_url}/documents/{document_id}/",
-                              headers = {"Authorization": f"Token {self._auth_token}"},
-                              data = data)
+        response = requests.patch(f"{self._api_url}/documents/{document_id}/",
+                                  headers = self._common_headers,
+                                  data = data)
+        if not response.ok:
+            self._log_request_error(response)
+        return response
 
     def get_documents_by_selector_name(self, selector, name):
         # We add the 's' to the selector to turn 'correspondent' into 'correspondents', etc.

@@ -146,6 +146,10 @@ class Config:
         self._fix_options()
         
     def _fix_options(self):
+        # Check if the environment variable PAPERLESS_DEBUG is true, and if so, force debug verbosity
+        # This is how it's checked in paperless-ngx, see https://github.com/paperless-ngx/paperless-ngx/blob/246f17c6c85ee0d4958e5c6e99f77007a050839c/src/paperless/settings.py#L42
+        if bool(os.environ.get("PAPERLESS_DEBUG", "NO").lower() in ("yes", "y", "1", "t", "true")):
+            self._options["verbose"] = "DEBUG"
         if isinstance(self._options.get("dry_run"), str):
             if self._options["dry_run"].lower() in ["f", "false", "no"]:
                 self._options["dry_run"] = False
