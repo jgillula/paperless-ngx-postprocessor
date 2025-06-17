@@ -127,6 +127,8 @@ if __name__ == "__main__":
 
         backup_documents = postprocessor.postprocess(documents)
 
+        logger.info(f"Changed {len(backup_documents)} out of {len(documents)} documents")
+
         if len(backup_documents) > 0 and config["backup"] is not None:
             logger.debug(f"Writing backup to {config['backup']}")
             with open(config["backup"], "w") as backup_file:
