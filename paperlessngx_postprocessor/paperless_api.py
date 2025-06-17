@@ -209,7 +209,7 @@ class PaperlessAPI:
         result["archive_serial_number"] = metadata_in_filename_format["asn"]
         result["tags"] = [self.get_item_id_by_name("tags", tag_name) for tag_name in metadata_in_filename_format["tag_list"]]
         result["title"] = metadata_in_filename_format["title"]
-        result["created"] = metadata_in_filename_format["created"]
+        #result["created"] = metadata_in_filename_format["created"]
         result["created_date"] = dateutil.parser.isoparse(metadata_in_filename_format["created"]).strftime("%F")
         result["added"] = metadata_in_filename_format["added"]
         
