@@ -5,6 +5,7 @@ import logging
 import sys
 import yaml
 import os
+import copy
 
 from paperlessngx_postprocessor import Config, PaperlessAPI, Postprocessor
 
@@ -45,7 +46,12 @@ if __name__ == "__main__":
 
     logger = logging.getLogger("paperlessngx_postprocessor")
     logger.setLevel(config["verbose"])
-    logger.debug(f"Running {sys.argv[0]} with config {config} and {selector_config}")
+    # If we're in debug mode, sanitize the config to not print auth tokens
+    if logger.level <= logging.DEBUG:
+        sanitized_config = copy.deepcopy(config)
+        if sanitized_config['auth_token'] is not None:
+            sanitized_config['auth_token'] = "XXXXXXXX"
+        logger.debug(f"Running {sys.argv[0]} with config {sanitized_config} and {selector_config}")
 
     # if config["selector"] != "all" and config["item_id_or_name"] is None:
     #     if config["selector"] == "restore":
