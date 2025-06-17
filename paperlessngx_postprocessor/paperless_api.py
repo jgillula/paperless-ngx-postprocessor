@@ -104,6 +104,7 @@ class PaperlessAPI:
                           "added_day": "added_day",
                           "asn": "archive_serial_number",
                           "title": "title__iexact",
+                          "tag": "tags__name__iexact",
                           "created_year": "created__year",
                           "created_month": "created__month",
                           "created_day": "created__day",
@@ -134,6 +135,10 @@ class PaperlessAPI:
 
         if isinstance(fields.get("created_date_object"), date):
             queries.append(f"created__year={fields['created_date_object'].year}&created__month={fields['created_date_object'].month}&created__day={fields['created_date_object'].day}")
+
+        if len(queries) == 0:
+            self._logger.error(f"No query specified")
+            return []
 
         query = "&".join(queries)
         self._logger.debug(f"Running query '{query}'")
@@ -196,7 +201,7 @@ class PaperlessAPI:
         result["archive_serial_number"] = metadata_in_filename_format["asn"]
         result["tags"] = [self.get_item_id_by_name("tags", tag_name) for tag_name in metadata_in_filename_format["tag_list"]]
         result["title"] = metadata_in_filename_format["title"]
-        result["created"] = metadata_in_filename_format["created"]
+        #result["created"] = metadata_in_filename_format["created"]
         result["created_date"] = dateutil.parser.isoparse(metadata_in_filename_format["created"]).strftime("%F")
         result["added"] = metadata_in_filename_format["added"]
         
