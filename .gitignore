@@ -1,5 +1,4 @@
 rulesets.d/*
-!rulesets.d/example.yml
 *.py~
 
 # Byte-compiled / optimized / DLL files
