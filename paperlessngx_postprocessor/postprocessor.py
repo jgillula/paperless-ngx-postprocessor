@@ -34,10 +34,10 @@ class DocumentRuleProcessor:
         self._env.globals["date"] = date
         self._env.globals["timedelta"] = timedelta
 
-    def matches(self, metadata):
+    def matches(self, metadata, content):
         if type(self._match) is str:
             template = self._env.from_string(self._match)
-            return template.render(**metadata) == "True"
+            return template.render(**metadata, content=content) == "True"
         elif type(self._match) is bool:
             return self._match
         else:
@@ -61,7 +61,7 @@ class DocumentRuleProcessor:
             return f"{int(new_day):02d}"
         except:
             return old_day
-    
+
     def _expand_two_digit_year(self, year, prefix=None):
         if prefix is None:
             prefix = str(datetime.now().year)[0:-2]
@@ -136,7 +136,7 @@ class DocumentRuleProcessor:
     def _jinja_filter_regex_sub(self, string, pattern, repl):
         '''Custom jinja filter for regex substitution'''
         return regex.sub(pattern, repl, string)
-    
+
     def _normalize_created_dates(self, new_metadata, old_metadata):
         result = new_metadata.copy()
         try:
@@ -154,7 +154,7 @@ class DocumentRuleProcessor:
 
         return result
 
-    def validate(self, metadata):
+    def validate(self, metadata, content):
         valid = True
 
         metadata = self._normalize_created_dates(metadata, metadata)
@@ -163,7 +163,7 @@ class DocumentRuleProcessor:
         if self._validation_rule is not None:
             self._logger.debug(f"Validating for rule {self.name} using metadata={metadata}")
             template = self._env.from_string(self._validation_rule)
-            template_result = template.render(**metadata).strip()
+            template_result = template.render(**metadata, content=content).strip()
             self._logger.debug(f"Validation template rendered to '{template_result}'")
             valid = (template_result != "False")
             if not valid:
@@ -172,7 +172,7 @@ class DocumentRuleProcessor:
             self._logger.debug(f"No validation rule found for {self.name}")
 
         return valid
-        
+
     def get_new_metadata(self, metadata, content):
         read_only_metadata_keys = ["correspondent",
                                    "document_type",
@@ -186,7 +186,7 @@ class DocumentRuleProcessor:
         read_only_metadata = {key: metadata[key] for key in read_only_metadata_keys if key in metadata}
         writable_metadata_keys = list(set(metadata.keys()) - set(read_only_metadata_keys))
         writable_metadata = {key: metadata[key] for key in writable_metadata_keys if key in metadata}
-        
+
         # Extract the regex_data
         if self._metadata_regex is not None:
             match_object = regex.search(self._metadata_regex, content)
@@ -243,7 +243,7 @@ class Postprocessor:
         self._skip_validation = skip_validation
 
         self._processors = []
-    
+
         for filename in sorted(list(self._rules_dir.glob("*.yml"))):
             if filename.is_file():
                 with open(filename, "r") as yaml_file:
@@ -255,12 +255,12 @@ class Postprocessor:
                         self._logger.warning(f"Unable to parse yaml in {filename}: {e}")
         self._logger.debug(f"Loaded {len(self._processors)} rules")
 
-        
+
     def _get_new_metadata_in_filename_format(self, metadata_in_filename_format, content):
         new_metadata = metadata_in_filename_format.copy()
-        
+
         for processor in self._processors:
-            if processor.matches(metadata_in_filename_format):
+            if processor.matches(metadata_in_filename_format, content):
                 self._logger.debug(f"Rule {processor.name} matches")
                 new_metadata = processor.get_new_metadata(metadata_in_filename_format, content)
                 metadata_in_filename_format = {**metadata_in_filename_format, **new_metadata}
@@ -269,10 +269,10 @@ class Postprocessor:
 
         return new_metadata
 
-    def _validate(self, metadata_in_filename_format):
+    def _validate(self, metadata_in_filename_format, content):
         for processor in self._processors:
-            if processor.matches(metadata_in_filename_format):
-                if not processor.validate(metadata_in_filename_format):
+            if processor.matches(metadata_in_filename_format, content):
+                if not processor.validate(metadata_in_filename_format, content):
                     return False
         return True
 
@@ -294,13 +294,13 @@ class Postprocessor:
                 if len(differences) > 0:
                     self._logger.info(f"Changes for document_id={document['id']}:")
                     for key in differences:
-                        self._logger.info(f" {key}: '{document[key]}' --> '{new_metadata[key]}'")                        
+                        self._logger.info(f" {key}: '{document[key]}' --> '{new_metadata[key]}'")
                     if not self._dry_run:
                         differences.append("created_date")
                         self._api.patch_document(document["id"], {key: new_metadata[key] for key in differences})
                         backup_data = {key: document[key] for key in differences}
                         backup_data["id"] = document["id"]
-                        backup_documents.append(backup_data)                        
+                        backup_documents.append(backup_data)
                 else:
                     self._logger.info(f"No changes for document_id={document['id']}")
             else:
@@ -310,7 +310,7 @@ class Postprocessor:
                 # Note that we have to refetch the document here to get the changes we just applied from postprocessing
                 metadata_in_filename_format = self._api.get_metadata_in_filename_format(self._api.get_document_by_id(document['id']))
                 metadata = self._api.get_metadata_from_filename_format(metadata_in_filename_format)
-                valid = self._validate(metadata_in_filename_format)
+                valid = self._validate(metadata_in_filename_format, document["content"])
                 if not valid:
                     num_invalid += 1
                     metadata["tags"].append(self._invalid_tag_id)
@@ -329,7 +329,7 @@ class Postprocessor:
             self._logger.warning(f"Found {num_invalid}/{len(documents)} invalid documents")
 
         return backup_documents
-        
+
 #         # if "created_year" in regex_data.keys():
 #         #     metadata["created_year"] = regex_data["created_year"]
 #         # if "created_month" in regex_data.keys():
@@ -350,14 +350,14 @@ class Postprocessor:
 #         #         template = self._env.from_string(self._created_date_adjustments["created_day"])
 #         #         new_created_date["created_day"] = self._normalize_day(template.render(**merged_metadata), metadata["created_year"])
 
-#         #     metadata.update(new_created_date)        
-                
+#         #     metadata.update(new_created_date)
+
 #         # original_created_date = dateutil.parser.isoparse(metadata["created"])
 #         # new_created_date = datetime(int(metadata["created_year"]), int(metadata["created_month"]), int(metadata["created_day"]), tzinfo=original_created_date.tzinfo)
 #         # metadata["created"] = new_created_date.isoformat()
 #         # #result["created"] = new_created_date.isoformat()
 #         # result["created_date"] = new_created_date.strftime("%F") # %F means YYYY-MM-DD
-            
+
 #         # if self._title_format is not None:
 #         #     try:
 #         #         merged_metadata = {**regex_data, **metadata}
@@ -380,7 +380,7 @@ class Postprocessor:
 #         self._processors = []
 
 #         config_dir_path = Path(config_dir)
-        
+
 #         for filename in config_dir_path.glob("*"):
 #             if filename.is_file():
 #                 with open(filename, "r") as yaml_file:
@@ -392,4 +392,4 @@ class Postprocessor:
 #                         print(f"Unable to parse yaml in {filename}")
 #         logger.debug(f"Loaded {len(self._processors)} rules")
 
-                
+
