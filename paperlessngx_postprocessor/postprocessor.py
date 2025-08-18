@@ -189,17 +189,27 @@ class DocumentRuleProcessor:
         read_only_metadata = {key: metadata[key] for key in read_only_metadata_keys if key in metadata}
         writable_metadata_keys = list(set(metadata.keys()) - set(read_only_metadata_keys))
         writable_metadata = {key: metadata[key] for key in writable_metadata_keys if key in metadata}
-        
+
         # Extract the regex_data
         if self._metadata_regex is not None:
-            match_object = regex.search(self._metadata_regex, content)
-            if match_object is not None:
-                regex_data = match_object.groupdict()
-                #writable_metadata.update(match_object.groupdict())
+            matches = regex.finditer(self._metadata_regex, content)
+            # Iterate over all matches and merge it
+            regex_data = {}
+            for match_object in matches:
+                if match_object is not None:
+                    current_groups = match_object.groupdict()
+                    for group_name, value in current_groups.items():
+                        if group_name in regex_data and value not in regex_data[group_name]:
+                            regex_data[group_name] = f"{regex_data[group_name]},{value}"
+                        else:
+                            regex_data[group_name] = value
+
+            # Process all merged matches at once
+            if regex_data:  # Only process if we found any matches
                 writable_metadata.update([(k, regex_data[k]) for k in regex_data if regex_data[k] is not None])
                 writable_metadata = self._normalize_created_dates(writable_metadata, metadata)
                 self._logger.debug(f"Regex results are {writable_metadata}")
-            else:
+            else:  # No matches found
                 self._logger.warning(f"Regex '{self._metadata_regex}' for '{self.name}' didn't match for document_id={metadata['document_id']}")
 
         # Cycle throguh the postprocessing rules
