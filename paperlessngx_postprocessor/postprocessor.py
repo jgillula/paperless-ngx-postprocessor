@@ -1,4 +1,5 @@
 import calendar
+import copy
 import dateutil.parser
 import jinja2
 import logging
@@ -22,6 +23,8 @@ class DocumentRuleProcessor:
         self._match = spec[self.name].get("match")
         self._metadata_regex = spec[self.name].get("metadata_regex")
         self._metadata_postprocessing = spec[self.name].get("metadata_postprocessing")
+        #self._custom_fields_regex = spec[self.name].get("custom_fields_regex")
+        #self._custom_fields_postprocessing = spec[self.name].get("custom_fields_postprocessing")
         self._validation_rule = spec[self.name].get("validation_rule")
         #self._title_format = spec[self.name].get("title_format")
 
@@ -138,7 +141,7 @@ class DocumentRuleProcessor:
         return regex.sub(pattern, repl, string)
     
     def _normalize_created_dates(self, new_metadata, old_metadata):
-        result = new_metadata.copy()
+        result = copy.deepcopy(new_metadata)
         try:
             result["created_year"] = str(int(new_metadata["created_year"]))
         except:
@@ -186,17 +189,27 @@ class DocumentRuleProcessor:
         read_only_metadata = {key: metadata[key] for key in read_only_metadata_keys if key in metadata}
         writable_metadata_keys = list(set(metadata.keys()) - set(read_only_metadata_keys))
         writable_metadata = {key: metadata[key] for key in writable_metadata_keys if key in metadata}
-        
+
         # Extract the regex_data
         if self._metadata_regex is not None:
-            match_object = regex.search(self._metadata_regex, content)
-            if match_object is not None:
-                regex_data = match_object.groupdict()
-                #writable_metadata.update(match_object.groupdict())
+            matches = regex.finditer(self._metadata_regex, content)
+            # Iterate over all matches and merge it
+            regex_data = {}
+            for match_object in matches:
+                if match_object is not None:
+                    current_groups = match_object.groupdict()
+                    for group_name, value in current_groups.items():
+                        if group_name in regex_data and value not in regex_data[group_name]:
+                            regex_data[group_name] = f"{regex_data[group_name]},{value}"
+                        else:
+                            regex_data[group_name] = value
+
+            # Process all merged matches at once
+            if regex_data:  # Only process if we found any matches
                 writable_metadata.update([(k, regex_data[k]) for k in regex_data if regex_data[k] is not None])
                 writable_metadata = self._normalize_created_dates(writable_metadata, metadata)
                 self._logger.debug(f"Regex results are {writable_metadata}")
-            else:
+            else:  # No matches found
                 self._logger.warning(f"Regex '{self._metadata_regex}' for '{self.name}' didn't match for document_id={metadata['document_id']}")
 
         # Cycle throguh the postprocessing rules
@@ -205,8 +218,20 @@ class DocumentRuleProcessor:
                 try:
                     old_value = writable_metadata.get(variable_name)
                     merged_metadata = {**writable_metadata, **read_only_metadata}
-                    template = self._env.from_string(self._metadata_postprocessing[variable_name])
-                    writable_metadata[variable_name] = template.render(**merged_metadata)
+
+                    if variable_name != "custom_fields":
+                        template = self._env.from_string(self._metadata_postprocessing[variable_name])
+                        writable_metadata[variable_name] = template.render(**merged_metadata)
+                    elif variable_name == "custom_fields":
+                        for custom_field_name in (
+                                self._metadata_postprocessing["custom_fields"]
+                        ).keys():
+                            custom_field_definition = self._api.get_custom_field_by_name(custom_field_name)
+                            for index, custom_field_metadata_iterate in enumerate(writable_metadata["custom_fields"]):
+                                if custom_field_definition and custom_field_metadata_iterate["field"] == custom_field_definition["id"]:
+                                    template = self._env.from_string(self._metadata_postprocessing[variable_name][custom_field_name])
+                                    writable_metadata[variable_name][index]["value"] = template.render(**merged_metadata)
+
                     writable_metadata = self._normalize_created_dates(writable_metadata, metadata)
                     self._logger.debug(f"Updating '{variable_name}' using template {self._metadata_postprocessing[variable_name]} and metadata {merged_metadata}\n: '{old_value}'->'{writable_metadata[variable_name]}'")
                 except Exception as e:
@@ -257,7 +282,7 @@ class Postprocessor:
 
         
     def _get_new_metadata_in_filename_format(self, metadata_in_filename_format, content):
-        new_metadata = metadata_in_filename_format.copy()
+        new_metadata = copy.deepcopy(metadata_in_filename_format)
         
         for processor in self._processors:
             if processor.matches(metadata_in_filename_format):

@@ -25,3 +25,11 @@ Parse creation date from filename:
     created_month: '{{ title_old | regex_sub("^(?P<created_year>\d{4})-(?P<created_month>\d{2})-(?P<created_day>\d{2}) (?P<title>.*)$", "\g<created_month>") }}'
     created_day:   '{{ title_old | regex_sub("^(?P<created_year>\d{4})-(?P<created_month>\d{2})-(?P<created_day>\d{2}) (?P<title>.*)$", "\g<created_day>") }}'
   validation_rule: '{{ num_documents(correspondent=correspondent, document_type=document_type, created_date_object=created_date_object) == 1 }}'
+---
+Ruleset for Custom Field:
+  match: True
+  metadata_regex: 'Eingegangen (?P<entry_day>\d{1,2}).(?P<entry_month>\d{1,2}).(?P<entry_year>\d{4})'
+  metadata_postprocessing:
+    title: "Test Custom Fields Functionality"
+    custom_fields:
+      Eingegangen: '{{entry_year}}-{{entry_month}}-{{entry_day}}'

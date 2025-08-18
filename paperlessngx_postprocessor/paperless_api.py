@@ -24,11 +24,27 @@ class PaperlessAPI:
 
         self._auth_token = auth_token
         self._cache = {}
-        self._cachable_types = ["correspondents", "document_types", "storage_paths", "tags"]
+        self._cachable_types = ["correspondents", "document_types", "storage_paths", "tags", "custom_fields"]
         self._paperless_api_version = 3
 
         self._common_headers = {"Authorization": f"Token {self._auth_token}",
+                                "Content-Type": "application/json",
                                 "Accept": f"application/json; version={self._paperless_api_version}"}
+
+    def _get_custom_fields(self):
+        return self._get_list("custom_fields")
+
+    def get_custom_field_by_name(self, search_name):
+        self._get_custom_fields()
+
+        search_result = [custom_field for custom_field in self._cache["custom_fields"] if custom_field["name"].lower() == search_name.lower().replace("_", " ")]
+        search_result = search_result[0] if search_result else None
+
+        if search_result:
+            return search_result
+        else:
+            self._logger.debug(f"Custom field with name {search_name} cannot be found.")
+            return {}
 
     def delete_document_by_id(self, document_id):
         item_type = "documents"
@@ -94,7 +110,7 @@ class PaperlessAPI:
     def patch_document(self, document_id, data):
         response = requests.patch(f"{self._api_url}/documents/{document_id}/",
                                   headers = self._common_headers,
-                                  data = data)
+                                  json = data)
         if not response.ok:
             self._log_request_error(response)
         return response
@@ -179,6 +195,9 @@ class PaperlessAPI:
     def get_tag_by_id(self, tag_id):
         return self._get_item_by_id("tags", tag_id)
 
+    def get_custom_field_by_id(self, custom_field_id):
+        return self._get_item_by_id("custom_fields", custom_field_id)
+
     def get_metadata_in_filename_format(self, metadata):
         new_metadata = {}
         new_metadata["document_id"] = metadata["id"]
@@ -202,7 +221,8 @@ class PaperlessAPI:
         new_metadata["added_day"] = f"{added_date.day:02d}"
         new_metadata["added_date"] = added_date.strftime("%F")
         new_metadata["added_date_object"] = added_date
-        
+        new_metadata["custom_fields"] = metadata["custom_fields"]
+
         return new_metadata
 
     def get_metadata_from_filename_format(self, metadata_in_filename_format):
@@ -217,7 +237,8 @@ class PaperlessAPI:
         #result["created"] = metadata_in_filename_format["created"]
         result["created_date"] = dateutil.parser.isoparse(metadata_in_filename_format["created"]).strftime("%F")
         result["added"] = metadata_in_filename_format["added"]
-        
+        result["custom_fields"] = metadata_in_filename_format["custom_fields"]
+
         return result
         
     def get_metadata_for_post_consume_script(self, document_id):
