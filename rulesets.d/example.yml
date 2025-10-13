@@ -36,7 +36,7 @@ rechnung_strom_set_custom_field_kosten:
   metadata_regex: '(Fälliger Betrag[.|\n]*)(?P<invoiceprice>^[\d|,]{,6} €)'
   metadata_postprocessing:
     custom_fields:
-      stromrechnung_kosten: "{{ invoiceprice }}"
+      kosten: "{{ invoiceprice }}"
 ...
 
 ---
@@ -45,7 +45,7 @@ rechnung_strom_set_custom_field_verbrauch:
   metadata_regex: '(?P<invoiceconsumption>^[\d|,]{,6})( kWh)'
   metadata_postprocessing:
     custom_fields:
-      stromrechnung_verbrauch: "{{ invoiceconsumption }}"
+      verbrauch: "{{ invoiceconsumption }}"
 ...
 
 
