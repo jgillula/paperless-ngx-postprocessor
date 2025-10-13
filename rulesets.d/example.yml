@@ -33,7 +33,7 @@ rechnung_amazon_set_custom_field_eingang:
 ---
 rechnung_strom_set_custom_field_kosten:
   match: "{{ correspondent == 'Tibber Deutschland GmbH' and document_type == 'Monatsrechnung' }}"
-  metadata_regex: '(Fälliger Betrag[.|\n]*)(?P<invoiceprice>^[\d|,]{,6} €)'
+  metadata_regex: '(Fälliger Betrag)(\n*)(?P<invoiceprice>\d{3}\,\d{2} €)'
   metadata_postprocessing:
     custom_fields:
       kosten: "{{ invoiceprice }}"
@@ -42,7 +42,7 @@ rechnung_strom_set_custom_field_kosten:
 ---
 rechnung_strom_set_custom_field_verbrauch:
   match: "{{ correspondent == 'Tibber Deutschland GmbH' and document_type == 'Monatsrechnung' }}"
-  metadata_regex: '(?P<invoiceconsumption>^[\d|,]{,6})( kWh)'
+  metadata_regex: '(?P<invoiceconsumption>[\d|,]{,6})( kWh mit einem Durchschnittspreis)'
   metadata_postprocessing:
     custom_fields:
       verbrauch: "{{ invoiceconsumption }}"
