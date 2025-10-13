@@ -42,7 +42,7 @@ rechnung_strom_set_custom_field_kosten:
 ---
 rechnung_strom_set_custom_field_verbrauch:
   match: "{{ correspondent == 'Tibber Deutschland GmbH' and document_type == 'Monatsrechnung' }}"
-  metadata_regex: '(?P<invoiceconsumption>[\d|,]{,6})( kWh mit einem Durchschnittspreis)'
+  metadata_regex: '(?P<invoiceconsumption>[\d|,]{,7})( kWh mit einem Durchschnittspreis)'
   metadata_postprocessing:
     custom_fields:
       verbrauch: "{{ invoiceconsumption }}"
