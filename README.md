@@ -321,6 +321,7 @@ The following fields are read-only, but will be updated automatically after ever
 paperless-ngx-postprocessor can be configured using the following environment variables. The defaults should work for a typical paperless-ngx deployment done via docker-compose. If you want to change them, just add them to the same `docker-compose.env` file as you use for Paperless-ngx, and they will be passed along from Paperless-ngx to paperless-ngx-postprocessor.
 
 * `PNGX_POSTPROCESSOR_AUTH_TOKEN=<token>`: The auth token to access the REST API of Paperless-ngx. If not specified, postprocessor will try to automagically get it from Paperless-ngx's database directly. (default: `None`)
+* `PNGX_POSTPROCESSOR_AUTH_TOKEN_FILE=<token_file_path>`: The auth token from a docker secret to access the REST API of Paperless-ngx . If specified, postprocessor will read the token from the given file. Will overwrite any value in PNGX_POSTPROCESSOR_AUTH_TOKEN.  (default: `None`)
 * `PNGX_POSTPROCESSOR_DRY_RUN=<bool>`: If set to `True`, paperless-ngx-postprocessor will not actually push any changes to paperless-ngx. (default: `False`)
 * `PNGX_POSTPROCESSOR_BACKUP=<bool or path>`: Backup file to write any changed values to. If no filename is given, one will be automatically generated based on the current date and time. If the path is a directory, the automatically generated file will be stored in that directory. (default: `False`)
 * `PNGX_POSTPROCESSOR_POSTPROCESSING_TAG=<tag name>`: A tag to apply if any changes are made during postprocessing. (default: `None`)
