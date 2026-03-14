@@ -67,6 +67,9 @@ class Config:
         return {"auth_token": Config.OptionSpec(None, {"metavar": "AUTH_TOKEN",
                                                        "type": str,
                                                        "help": "The auth token to access the REST API of Paperless-ngx. If not specified, postprocessor will try to automagically get it from Paperless-ngx's database directly."}),
+                "auth_token_file": Config.OptionSpec(None, {"metavar": "AUTH_TOKEN_FILE",
+                                                       "type": str,
+                                                       "help": "The auth token to access the REST API of Paperless-ngx. If not specified, postprocessor will try to automagically get it from Paperless-ngx's database directly."}),
                 "dry_run": Config.OptionSpec(False, {"action": "store_const",
                                                      "const": True,
                                                      "help": "Don't actually make any changes, just print what would happen. Forces the verbosity level to be at least INFO. (default: {default})"}),
@@ -189,7 +192,14 @@ class Config:
                 self._options["added_range"] = new_dates
             else:
                 self._options["added_range"] = None
-
+                
+        if isinstance(self._options.get("auth_token_file"), str):
+            token_file = self._options.get("auth_token_file")
+            with open(token_file, "r") as f:
+                token = f.readline()
+                if token:
+                    self._options["auth_token"] = token
+        
     def __getitem__(self, index):
         return self._options[index]
 
