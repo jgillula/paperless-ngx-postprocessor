@@ -2,6 +2,7 @@ import dateutil.parser
 import logging
 import os
 import requests
+import copy
 from datetime import date
 from pathlib import Path
 
@@ -25,7 +26,7 @@ class PaperlessAPI:
         self._auth_token = auth_token
         self._cache = {}
         self._cachable_types = ["correspondents", "document_types", "storage_paths", "tags"]
-        self._paperless_api_version = 3
+        self._paperless_api_version = 10
 
         self._common_headers = {"Authorization": f"Token {self._auth_token}",
                                 "Accept": f"application/json; version={self._paperless_api_version}"}
@@ -93,8 +94,8 @@ class PaperlessAPI:
 
     def patch_document(self, document_id, data):
         response = requests.patch(f"{self._api_url}/documents/{document_id}/",
-                                  headers = self._common_headers,
-                                  data = data)
+                              headers = {"Authorization": f"Token {self._auth_token}", 'Content-type': "application/json" },
+                              json = data)
         if not response.ok:
             self._log_request_error(response)
         return response
@@ -121,6 +122,7 @@ class PaperlessAPI:
                           "created_year": "created__year",
                           "created_month": "created__month",
                           "created_day": "created__day",
+                          "custom_fields": "custom_fields"
         }
 
         queries = []
@@ -202,6 +204,8 @@ class PaperlessAPI:
         new_metadata["added_day"] = f"{added_date.day:02d}"
         new_metadata["added_date"] = added_date.strftime("%F")
         new_metadata["added_date_object"] = added_date
+        new_metadata["custom_fields"] = metadata["custom_fields"]
+        new_metadata["content"] = metadata["content"]
         
         return new_metadata
 
@@ -217,6 +221,7 @@ class PaperlessAPI:
         #result["created"] = metadata_in_filename_format["created"]
         result["created_date"] = dateutil.parser.isoparse(metadata_in_filename_format["created"]).strftime("%F")
         result["added"] = metadata_in_filename_format["added"]
+        result["custom_fields"] = metadata_in_filename_format["custom_fields"]
         
         return result
         
@@ -236,5 +241,24 @@ class PaperlessAPI:
             result["DOCUMENT_ARCHIVE_PATH"] = None
         result["DOCUMENT_CORRESPONDENT"] = self.get_correspondent_by_id(document.get("correspondent")).get("name")
         result["DOCUMENT_TAGS"] = ",".join([self.get_tag_by_id(tag_id).get("name") for tag_id in document.get("tags")])
+
+        return result
+
+    def get_customfield_from_name(self, customfield_name):
+        result = {}
+
+        # rework underscore's into url spaces
+        url_reworked_customfield_name = customfield_name.replace("_","%20")
+
+        response = requests.get(f"{self._api_url}/custom_fields/?name__icontains={url_reworked_customfield_name}", headers = {"Authorization": f"Token {self._auth_token}"})
+
+        if len(response.json().get("results")) > 1:
+            self._logger.error("Found more than one custom_field with specified name in filter. Name has to be unique.")
+        elif len(response.json().get("results")) == 0:
+            self._logger.error("Found no custom fields with this name.")
+        else:
+            self._logger.debug(f"Found custom_field: \"{response.json().get('results')[0].get('name')}\" with id {response.json().get('results')[0].get('id')}. Building custom_fields object definition.")
+
+        result = copy.deepcopy(response.json().get("results")[0])
 
         return result

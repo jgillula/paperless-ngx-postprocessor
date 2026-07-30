@@ -1,27 +1,378 @@
-Some Ruleset Name:
-  match: "{{ correspondent == 'The Bank' and document_type == 'Transfer Confirmation' }}"
-  metadata_regex: '(?:From (?P<source>.*?)\n)|(?:through (?P<created_month>\w*?) (?P<created_day>\d{1,2}), (?P<created_year>\d{2}))'
-  metadata_postprocessing:
-    created_year: "{{ created_year | expand_two_digit_year }}" # This uses the 'expand_year' filter, which will take a two-digit year like 57 and turn it into a four-digit year like 2057
-    source: '{{ source | title }}' # This applies the Jinja2 'title' filter, capitalizing each word
-    title: '{{created_year}}-{{created_month}}-{{created_day}} -- {{correspondent}} -- {{document_type}} (from {{ source }})'
 ---
-# You can put multiple rules in the same file if you want
-# Note that rules are applied in order, so any changes from this rule will overwrite changes from previous rules
-Some Other Ruleset Name:
-  # This will always match
+set_title:
   match: True
   metadata_postprocessing:
-    title: '{{created_year}}-{{created_month}}-{{created_day}} -- {{correspondent}} -- {{document_type}}'
+    title: "{{created_year}}-{{created_month}}-{{created_day}}_{{document_type}}_{{correspondent|replace(' ', '_')}}"
+...
+
 ---
-Parse creation date from filename:
-  # Matches all documents with a title starting with a date in iso format followed by a space
-  # title: "2020-01-31 important document"
-  match: '{{ title | regex_match("\d{4}-\d\d-\d\d ") }}'
+lohnabrechnung_set_title:
+  match: "{{ correspondent == 'All for One Group SE' and document_type == 'Lohnabrechnung' }}"
+  metadata_regex: '(Zeitraum )(\d{2}\.\d{2}\.)( bis )(?P<created_day>\d{2})\.(?P<created_month>\d{2})\.(?P<created_year>\d{4})(:)'
   metadata_postprocessing:
-    title_old:     '{{ title }}' # saved as temporary value
-    title:         '{{ title_old | regex_sub("^(?P<created_year>\d{4})-(?P<created_month>\d{2})-(?P<created_day>\d{2}) (?P<title>.*)$", "\g<title>") }}'
-    created_year:  '{{ title_old | regex_sub("^(?P<created_year>\d{4})-(?P<created_month>\d{2})-(?P<created_day>\d{2}) (?P<title>.*)$", "\g<created_year>") }}'
-    created_month: '{{ title_old | regex_sub("^(?P<created_year>\d{4})-(?P<created_month>\d{2})-(?P<created_day>\d{2}) (?P<title>.*)$", "\g<created_month>") }}'
-    created_day:   '{{ title_old | regex_sub("^(?P<created_year>\d{4})-(?P<created_month>\d{2})-(?P<created_day>\d{2}) (?P<title>.*)$", "\g<created_day>") }}'
-  validation_rule: '{{ num_documents(correspondent=correspondent, document_type=document_type, created_date_object=created_date_object) == 1 }}'
+    title: "{{created_year}}-{{created_month}}-{{created_day}}_{{document_type}}_{{correspondent|replace(' ', '_')}}"
+...
+
+---
+rechnung_amazon_set_title:
+  match: "{{ correspondent == 'Amazon' and document_type == 'Einzelrechnung' }}"
+  metadata_regex: '(Bestellnummer )(?P<invoicenumber>\d{3}-\d{7}-\d{7})'
+  metadata_postprocessing:
+    title: "{{created_year}}-{{created_month}}-{{created_day}}_{{document_type}}_{{correspondent}}_{{invoicenumber}}"
+...
+
+---
+rechnung_amazon_set_custom_field_eingang:
+  match: "{{ correspondent == 'Amazon' and document_type == 'Einzelrechnung' }}"
+  #metadata_regex: '(Bestellnummer )(?P<invoicenumber>\d{3}-\d{7}-\d{7})'
+  metadata_postprocessing:
+    custom_fields:
+      eingang: "{{ added_year }}-{{ added_month }}-{{ added_day }}"
+...
+
+---
+rechnung_strom_set_custom_field_kosten:
+  match: "{{ correspondent == 'Tibber Deutschland GmbH' and document_type == 'Monatsrechnung' }}"
+  metadata_regex: '(Fälliger Betrag)(\n*)(?P<invoiceprice>\d{3}\,\d{2} €)'
+  metadata_postprocessing:
+    custom_fields:
+      kosten: "{{ invoiceprice }}"
+...
+
+---
+rechnung_strom_set_custom_field_verbrauch:
+  match: "{{ correspondent == 'Tibber Deutschland GmbH' and document_type == 'Monatsrechnung' }}"
+  metadata_regex: '(?P<invoiceconsumption>[\d|,|.]{,10})( kWh mit einem Durchschnittspreis)'
+  metadata_postprocessing:
+    custom_fields:
+      verbrauch: "{{ invoiceconsumption }}"
+...
+
+
+---
+custom_field_bezahlt_pos_terminal_form1:
+  match: "{{ document_type == 'Einzelrechnung' and 'True' if 'Terminal-ID' in content and 'True' if 'Pos-Info' in content and 'True' if 'Genehmigungs-Nr.' in content }}"
+  metadata_regex: '(?i)(Datum:)[ ]?(?P<receipt_day>\d{2})[ ]?(\.|,)[ ]?(?P<receipt_month>\d{2})[ ]?(\.|,)[ ]?(?P<receipt_year>\d{4})[\s\S]*(Uhrzeit:)[\s\S]*(Beleg-Nr.)'
+  metadata_postprocessing:
+    custom_fields:
+      bezahlt: "{{ receipt_year + '-' + receipt_month + '-' + receipt_day }}"
+...
+
+---
+custom_field_eingang_jan:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'EINGANG' in content and 'True' if 'JAN' in content }}"
+  metadata_regex: '(?i)(E[ ]?I[ ]?N[ ]?G[ ]?A[ ]?N[ ]?G)[ ]?(?P<received_day>\d{2})[ ]?(\.|,|)[ ]?(?P<received_month>\w{3})[ ]?(\.|,|)[ ]?(?P<received_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      eingang: "{{ received_year + '-01-' + received_day if received_year is defined and received_day is defined else '01-01-1950' }}"
+...
+---
+custom_field_eingang_feb:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'EINGANG' in content and 'True' if 'FEB' in content }}"
+  metadata_regex: '(?i)(E[ ]?I[ ]?N[ ]?G[ ]?A[ ]?N[ ]?G)[ ]?(?P<received_day>\d{2})[ ]?(\.|,|)[ ]?(?P<received_month>\w{3})[ ]?(\.|,|)[ ]?(?P<received_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      eingang: "{{ received_year + '-02-' + received_day if received_year is defined and received_day is defined else '01-01-1950' }}"
+...
+---
+custom_field_eingang_mrz:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'EINGANG' in content and 'True' if 'MRZ' in content }}"
+  metadata_regex: '(?i)(E[ ]?I[ ]?N[ ]?G[ ]?A[ ]?N[ ]?G)[ ]?(?P<received_day>\d{2})[ ]?(\.|,|)[ ]?(?P<received_month>\w{3})[ ]?(\.|,|)[ ]?(?P<received_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      eingang: "{{ received_year + '-03-' + received_day if received_year is defined and received_day is defined else '01-01-1950' }}"
+...
+---
+custom_field_eingang_apr:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'EINGANG' in content and 'True' if 'APR' in content }}"
+  metadata_regex: '(?i)(E[ ]?I[ ]?N[ ]?G[ ]?A[ ]?N[ ]?G)[ ]?(?P<received_day>\d{2})[ ]?(\.|,|)[ ]?(?P<received_month>\w{3})[ ]?(\.|,|)[ ]?(?P<received_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      eingang: "{{ received_year + '-04-' + received_day if received_year is defined and received_day is defined else '01-01-1950' }}"
+...
+---
+custom_field_eingang_mai:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'EINGANG' in content and 'True' if 'MAI' in content }}"
+  metadata_regex: '(?i)(E[ ]?I[ ]?N[ ]?G[ ]?A[ ]?N[ ]?G)[ ]?(?P<received_day>\d{2})[ ]?(\.|,|)[ ]?(?P<received_month>\w{3})[ ]?(\.|,|)[ ]?(?P<received_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      eingang: "{{ received_year + '-05-' + received_day if received_year is defined and received_day is defined else '01-01-1950' }}"
+...
+---
+custom_field_eingang_juni:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'EINGANG' in content and 'True' if 'JUNI' in content }}"
+  metadata_regex: '(?i)(E[ ]?I[ ]?N[ ]?G[ ]?A[ ]?N[ ]?G)[ ]?(?P<received_day>\d{2})[ ]?(\.|,|)[ ]?(?P<received_month>\w{3})[ ]?(\.|,|)[ ]?(?P<received_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      eingang: "{{ received_year + '-06-' + received_day if received_year is defined and received_day is defined else '01-01-1950' }}"
+...
+---
+custom_field_eingang_juli:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'EINGANG' in content and 'True' if 'JULI' in content }}"
+  metadata_regex: '(?i)(E[ ]?I[ ]?N[ ]?G[ ]?A[ ]?N[ ]?G)[ ]?(?P<received_day>\d{2})[ ]?(\.|,|)[ ]?(?P<received_month>\w{3})[ ]?(\.|,|)[ ]?(?P<received_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      eingang: "{{ received_year + '-07-' + received_day if received_year is defined and received_day is defined else '01-01-1950' }}"
+...
+---
+custom_field_eingang_aug:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'EINGANG' in content and 'True' if 'AUG' in content }}"
+  metadata_regex: '(?i)(E[ ]?I[ ]?N[ ]?G[ ]?A[ ]?N[ ]?G)[ ]?(?P<received_day>\d{2})[ ]?(\.|,|)[ ]?(?P<received_month>\w{3})[ ]?(\.|,|)[ ]?(?P<received_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      eingang: "{{ received_year + '-08-' + received_day if received_year is defined and received_day is defined else '01-01-1950' }}"
+...
+---
+custom_field_eingang_sep:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'EINGANG' in content and 'True' if 'SEP' in content }}"
+  metadata_regex: '(?i)(E[ ]?I[ ]?N[ ]?G[ ]?A[ ]?N[ ]?G)[ ]?(?P<received_day>\d{2})[ ]?(\.|,|)[ ]?(?P<received_month>\w{3})[ ]?(\.|,|)[ ]?(?P<received_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      eingang: "{{ received_year + '-09-' + received_day if received_year is defined and received_day is defined else '01-01-1950' }}"
+...
+---
+custom_field_eingang_okt:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'EINGANG' in content and 'True' if 'OKT' in content }}"
+  metadata_regex: '(?i)(E[ ]?I[ ]?N[ ]?G[ ]?A[ ]?N[ ]?G)[ ]?(?P<received_day>\d{2})[ ]?(\.|,|)[ ]?(?P<received_month>\w{3})[ ]?(\.|,|)[ ]?(?P<received_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      eingang: "{{ received_year + '-10-' + received_day if received_year is defined and received_day is defined else '01-01-1950' }}"
+...
+---
+custom_field_eingang_nov:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'EINGANG' in content and 'True' if 'NOV' in content }}"
+  metadata_regex: '(?i)(E[ ]?I[ ]?N[ ]?G[ ]?A[ ]?N[ ]?G)[ ]?(?P<received_day>\d{2})[ ]?(\.|,|)[ ]?(?P<received_month>\w{3})[ ]?(\.|,|)[ ]?(?P<received_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      eingang: "{{ received_year + '-11-' + received_day if received_year is defined and received_day is defined else '01-01-1950' }}"
+...
+---
+custom_field_eingang_dez:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'EINGANG' in content and 'True' if 'DEZ' in content }}"
+  metadata_regex: '(?i)(E[ ]?I[ ]?N[ ]?G[ ]?A[ ]?N[ ]?G)[ ]?(?P<received_day>\d{2})[ ]?(\.|,|)[ ]?(?P<received_month>\w{3})[ ]?(\.|,|)[ ]?(?P<received_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      eingang: "{{ received_year + '-12-' + received_day if received_year is defined and received_day is defined else '01-01-1950' }}"
+...
+
+
+---
+custom_field_bezahlt_jan:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'BEZAHLT' in content and 'True' if 'JAN' in content }}"
+  metadata_regex: '(?i)(B[ ]?E[ ]?Z[ ]?A[ ]?H[ ]?L[ ]?T)[ ]?(?P<bezahlt_day>\d{2})[ ]?(\.|,|)[ ]?(?P<bezahlt_month>\w{3})[ ]?(\.|,|)[ ]?(?P<bezahlt_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      bezahlt: "{{ bezahlt_year + '-01-' + bezahlt_day if bezahlt_year is defined and bezahlt_day is defined else '01-01-1950' }}"
+...
+---
+custom_field_bezahlt_feb:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'BEZAHLT' in content and 'True' if 'FEB' in content }}"
+  metadata_regex: '(?i)(B[ ]?E[ ]?Z[ ]?A[ ]?H[ ]?L[ ]?T)[ ]?(?P<bezahlt_day>\d{2})[ ]?(\.|,|)[ ]?(?P<bezahlt_month>\w{3})[ ]?(\.|,|)[ ]?(?P<bezahlt_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      bezahlt: "{{ bezahlt_year + '-02-' + bezahlt_day if bezahlt_year is defined and bezahlt_day is defined else '01-01-1950' }}"
+...
+---
+custom_field_bezahlt_mrz:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'BEZAHLT' in content and 'True' if 'MRZ' in content }}"
+  metadata_regex: '(?i)(B[ ]?E[ ]?Z[ ]?A[ ]?H[ ]?L[ ]?T)[ ]?(?P<bezahlt_day>\d{2})[ ]?(\.|,|)[ ]?(?P<bezahlt_month>\w{3})[ ]?(\.|,|)[ ]?(?P<bezahlt_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      bezahlt: "{{ bezahlt_year + '-03-' + bezahlt_day if bezahlt_year is defined and bezahlt_day is defined else '01-01-1950' }}"
+...
+---
+custom_field_bezahlt_apr:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'BEZAHLT' in content and 'True' if 'APR' in content }}"
+  metadata_regex: '(?i)(B[ ]?E[ ]?Z[ ]?A[ ]?H[ ]?L[ ]?T)[ ]?(?P<bezahlt_day>\d{2})[ ]?(\.|,|)[ ]?(?P<bezahlt_month>\w{3})[ ]?(\.|,|)[ ]?(?P<bezahlt_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      bezahlt: "{{ bezahlt_year + '-04-' + bezahlt_day if bezahlt_year is defined and bezahlt_day is defined else '01-01-1950' }}"
+...
+---
+custom_field_bezahlt_mai:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'BEZAHLT' in content and 'True' if 'MAI' in content }}"
+  metadata_regex: '(?i)(B[ ]?E[ ]?Z[ ]?A[ ]?H[ ]?L[ ]?T)[ ]?(?P<bezahlt_day>\d{2})[ ]?(\.|,|)[ ]?(?P<bezahlt_month>\w{3})[ ]?(\.|,|)[ ]?(?P<bezahlt_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      bezahlt: "{{ bezahlt_year + '-05-' + bezahlt_day if bezahlt_year is defined and bezahlt_day is defined else '01-01-1950' }}"
+...
+---
+custom_field_bezahlt_juni:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'BEZAHLT' in content and 'True' if 'JUNI' in content }}"
+  metadata_regex: '(?i)(B[ ]?E[ ]?Z[ ]?A[ ]?H[ ]?L[ ]?T)[ ]?(?P<bezahlt_day>\d{2})[ ]?(\.|,|)[ ]?(?P<bezahlt_month>\w{3})[ ]?(\.|,|)[ ]?(?P<bezahlt_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      bezahlt: "{{ bezahlt_year + '-06-' + bezahlt_day if bezahlt_year is defined and bezahlt_day is defined else '01-01-1950' }}"
+...
+---
+custom_field_bezahlt_juli:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'BEZAHLT' in content and 'True' if 'JULI' in content }}"
+  metadata_regex: '(?i)(B[ ]?E[ ]?Z[ ]?A[ ]?H[ ]?L[ ]?T)[ ]?(?P<bezahlt_day>\d{2})[ ]?(\.|,|)[ ]?(?P<bezahlt_month>\w{3})[ ]?(\.|,|)[ ]?(?P<bezahlt_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      bezahlt: "{{ bezahlt_year + '-07-' + bezahlt_day if bezahlt_year is defined and bezahlt_day is defined else '01-01-1950' }}"
+...
+---
+custom_field_bezahlt_aug:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'BEZAHLT' in content and 'True' if 'AUG' in content }}"
+  metadata_regex: '(?i)(B[ ]?E[ ]?Z[ ]?A[ ]?H[ ]?L[ ]?T)[ ]?(?P<bezahlt_day>\d{2})[ ]?(\.|,|)[ ]?(?P<bezahlt_month>\w{3})[ ]?(\.|,|)[ ]?(?P<bezahlt_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      bezahlt: "{{ bezahlt_year + '-08-' + bezahlt_day if bezahlt_year is defined and bezahlt_day is defined else '01-01-1950' }}"
+...
+---
+custom_field_bezahlt_sep:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'BEZAHLT' in content and 'True' if 'SEP' in content }}"
+  metadata_regex: '(?i)(B[ ]?E[ ]?Z[ ]?A[ ]?H[ ]?L[ ]?T)[ ]?(?P<bezahlt_day>\d{2})[ ]?(\.|,|)[ ]?(?P<bezahlt_month>\w{3})[ ]?(\.|,|)[ ]?(?P<bezahlt_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      bezahlt: "{{ bezahlt_year + '-09-' + bezahlt_day if bezahlt_year is defined and bezahlt_day is defined else '01-01-1950' }}"
+...
+---
+custom_field_bezahlt_okt:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'BEZAHLT' in content and 'True' if 'OKT' in content }}"
+  metadata_regex: '(?i)(B[ ]?E[ ]?Z[ ]?A[ ]?H[ ]?L[ ]?T)[ ]?(?P<bezahlt_day>\d{2})[ ]?(\.|,|)[ ]?(?P<bezahlt_month>\w{3})[ ]?(\.|,|)[ ]?(?P<bezahlt_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      bezahlt: "{{ bezahlt_year + '-10-' + bezahlt_day if bezahlt_year is defined and bezahlt_day is defined else '01-01-1950' }}"
+...
+---
+custom_field_bezahlt_nov:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'BEZAHLT' in content and 'True' if 'NOV' in content }}"
+  metadata_regex: '(?i)(B[ ]?E[ ]?Z[ ]?A[ ]?H[ ]?L[ ]?T)[ ]?(?P<bezahlt_day>\d{2})[ ]?(\.|,|)[ ]?(?P<bezahlt_month>\w{3})[ ]?(\.|,|)[ ]?(?P<bezahlt_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      bezahlt: "{{ bezahlt_year + '-11-' + bezahlt_day if bezahlt_year is defined and bezahlt_day is defined else '01-01-1950' }}"
+...
+---
+custom_field_bezahlt_dez:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'BEZAHLT' in content and 'True' if 'DEZ' in content }}"
+  metadata_regex: '(?i)(B[ ]?E[ ]?Z[ ]?A[ ]?H[ ]?L[ ]?T)[ ]?(?P<bezahlt_day>\d{2})[ ]?(\.|,|)[ ]?(?P<bezahlt_month>\w{3})[ ]?(\.|,|)[ ]?(?P<bezahlt_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      bezahlt: "{{ bezahlt_year + '-12-' + bezahlt_day if bezahlt_year is defined and bezahlt_day is defined else '01-01-1950' }}"
+...
+
+
+
+---
+custom_field_erledigt_jan:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'ERLEDIGT' in content and 'True' if 'JAN' in content }}"
+  metadata_regex: '(?i)(E[ ]?R[ ]?L[ ]?E[ ]?D[ ]?I[ ]?G[ ]?T)[ ]?(?P<erledigt_day>\d{2})[ ]?(\.|,|)[ ]?(?P<erledigt_month>\w{3})[ ]?(\.|,|)[ ]?(?P<erledigt_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      erledigt: "{{ erledigt_year + '-01-' + erledigt_day if erledigt_year is defined and erledigt_day is defined else '01-01-1950' }}"
+...
+---
+custom_field_erledigt_feb:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'ERLEDIGT' in content and 'True' if 'FEB' in content }}"
+  metadata_regex: '(?i)(E[ ]?R[ ]?L[ ]?E[ ]?D[ ]?I[ ]?G[ ]?T)[ ]?(?P<erledigt_day>\d{2})[ ]?(\.|,|)[ ]?(?P<erledigt_month>\w{3})[ ]?(\.|,|)[ ]?(?P<erledigt_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      erledigt: "{{ erledigt_year + '-02-' + erledigt_day if erledigt_year is defined and erledigt_day is defined else '01-01-1950' }}"
+...
+---
+custom_field_erledigt_mrz:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'ERLEDIGT' in content and 'True' if 'MRZ' in content }}"
+  metadata_regex: '(?i)(E[ ]?R[ ]?L[ ]?E[ ]?D[ ]?I[ ]?G[ ]?T)[ ]?(?P<erledigt_day>\d{2})[ ]?(\.|,|)[ ]?(?P<erledigt_month>\w{3})[ ]?(\.|,|)[ ]?(?P<erledigt_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      erledigt: "{{ erledigt_year + '-03-' + erledigt_day if erledigt_year is defined and erledigt_day is defined else '01-01-1950' }}"
+...
+---
+custom_field_erledigt_apr:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'ERLEDIGT' in content and 'True' if 'APR' in content }}"
+  metadata_regex: '(?i)(E[ ]?R[ ]?L[ ]?E[ ]?D[ ]?I[ ]?G[ ]?T)[ ]?(?P<erledigt_day>\d{2})[ ]?(\.|,|)[ ]?(?P<erledigt_month>\w{3})[ ]?(\.|,|)[ ]?(?P<erledigt_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      erledigt: "{{ erledigt_year + '-04-' + erledigt_day if erledigt_year is defined and erledigt_day is defined else '01-01-1950' }}"
+...
+---
+custom_field_erledigt_mai:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'ERLEDIGT' in content and 'True' if 'MAI' in content }}"
+  metadata_regex: '(?i)(E[ ]?R[ ]?L[ ]?E[ ]?D[ ]?I[ ]?G[ ]?T)[ ]?(?P<erledigt_day>\d{2})[ ]?(\.|,|)[ ]?(?P<erledigt_month>\w{3})[ ]?(\.|,|)[ ]?(?P<erledigt_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      erledigt: "{{ erledigt_year + '-05-' + erledigt_day if erledigt_year is defined and erledigt_day is defined else '01-01-1950' }}"
+...
+---
+custom_field_erledigt_juni:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'ERLEDIGT' in content and 'True' if 'JUNI' in content }}"
+  metadata_regex: '(?i)(E[ ]?R[ ]?L[ ]?E[ ]?D[ ]?I[ ]?G[ ]?T)[ ]?(?P<erledigt_day>\d{2})[ ]?(\.|,|)[ ]?(?P<erledigt_month>\w{3})[ ]?(\.|,|)[ ]?(?P<erledigt_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      erledigt: "{{ erledigt_year + '-06-' + erledigt_day if erledigt_year is defined and erledigt_day is defined else '01-01-1950' }}"
+...
+---
+custom_field_erledigt_juli:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'ERLEDIGT' in content and 'True' if 'JULI' in content }}"
+  metadata_regex: '(?i)(E[ ]?R[ ]?L[ ]?E[ ]?D[ ]?I[ ]?G[ ]?T)[ ]?(?P<erledigt_day>\d{2})[ ]?(\.|,|)[ ]?(?P<erledigt_month>\w{3})[ ]?(\.|,|)[ ]?(?P<erledigt_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      erledigt: "{{ erledigt_year + '-07-' + erledigt_day if erledigt_year is defined and erledigt_day is defined else '01-01-1950' }}"
+...
+---
+custom_field_erledigt_aug:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'ERLEDIGT' in content and 'True' if 'AUG' in content }}"
+  metadata_regex: '(?i)(E[ ]?R[ ]?L[ ]?E[ ]?D[ ]?I[ ]?G[ ]?T)[ ]?(?P<erledigt_day>\d{2})[ ]?(\.|,|)[ ]?(?P<erledigt_month>\w{3})[ ]?(\.|,|)[ ]?(?P<erledigt_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      erledigt: "{{ erledigt_year + '-08-' + erledigt_day if erledigt_year is defined and erledigt_day is defined else '01-01-1950' }}"
+...
+---
+custom_field_erledigt_sep:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'ERLEDIGT' in content and 'True' if 'SEP' in content }}"
+  metadata_regex: '(?i)(E[ ]?R[ ]?L[ ]?E[ ]?D[ ]?I[ ]?G[ ]?T)[ ]?(?P<erledigt_day>\d{2})[ ]?(\.|,|)[ ]?(?P<erledigt_month>\w{3})[ ]?(\.|,|)[ ]?(?P<erledigt_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      erledigt: "{{ erledigt_year + '-09-' + erledigt_day if erledigt_year is defined and erledigt_day is defined else '01-01-1950' }}"
+...
+---
+custom_field_erledigt_okt:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'ERLEDIGT' in content and 'True' if 'OKT' in content }}"
+  metadata_regex: '(?i)(E[ ]?R[ ]?L[ ]?E[ ]?D[ ]?I[ ]?G[ ]?T)[ ]?(?P<erledigt_day>\d{2})[ ]?(\.|,|)[ ]?(?P<erledigt_month>\w{3})[ ]?(\.|,|)[ ]?(?P<erledigt_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      erledigt: "{{ erledigt_year + '-10-' + erledigt_day if erledigt_year is defined and erledigt_day is defined else '01-01-1950' }}"
+...
+---
+custom_field_erledigt_nov:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'ERLEDIGT' in content and 'True' if 'NOV' in content }}"
+  metadata_regex: '(?i)(E[ ]?R[ ]?L[ ]?E[ ]?D[ ]?I[ ]?G[ ]?T)[ ]?(?P<erledigt_day>\d{2})[ ]?(\.|,|)[ ]?(?P<erledigt_month>\w{3})[ ]?(\.|,|)[ ]?(?P<erledigt_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      erledigt: "{{ erledigt_year + '-11-' + erledigt_day if erledigt_year is defined and erledigt_day is defined else '01-01-1950' }}"
+...
+---
+custom_field_erledigt_dez:
+  match: "{{ document_type != 'Lohnabrechnung' and 'True' if 'ERLEDIGT' in content and 'True' if 'DEZ' in content }}"
+  metadata_regex: '(?i)(E[ ]?R[ ]?L[ ]?E[ ]?D[ ]?I[ ]?G[ ]?T)[ ]?(?P<erledigt_day>\d{2})[ ]?(\.|,|)[ ]?(?P<erledigt_month>\w{3})[ ]?(\.|,|)[ ]?(?P<erledigt_year>\d{4})'
+  metadata_postprocessing:
+    custom_fields:
+      erledigt: "{{ erledigt_year + '-12-' + erledigt_day if erledigt_year is defined and erledigt_day is defined else '01-01-1950' }}"
+...
+
+
+#Some Ruleset Name:
+#  match: "{{ correspondent == 'The Bank' and document_type == 'Transfer Confirmation' }}"
+#  metadata_regex: '(?:From (?P<source>.*?)\n)|(?:through (?P<created_month>\w*?) (?P<created_day>\d{1,2}), (?P<created_year>\d{2}))'
+#  metadata_postprocessing:
+#    created_year: "{{ created_year | expand_two_digit_year }}" # This uses the 'expand_year' filter, which will take a two-digit year like 57 and turn it into a four-digit year like 2057
+#    source: '{{ source | title }}' # This applies the Jinja2 'title' filter, capitalizing each word
+#    title: '{{created_year}}-{{created_month}}-{{created_day}} -- {{correspondent}} -- {{document_type}} (from {{ source }})'
+#---
+# You can put multiple rules in the same file if you want
+# Note that rules are applied in order, so any changes from this rule will overwrite changes from previous rules
+
+#Parse creation date from filename:
+#  # Matches all documents with a title starting with a date in iso format followed by a space
+#  # title: "2020-01-31 important document"
+#  match: '{{ title | regex_match("\d{4}-\d\d-\d\d ") }}'
+#  metadata_postprocessing:
+#    title_old:     '{{ title }}' # saved as temporary value
+#    title:         '{{ title_old | regex_sub("^(?P<created_year>\d{4})-(?P<created_month>\d{2})-(?P<created_day>\d{2}) (?P<title>.*)$", "\g<title>") }}'
+#    created_year:  '{{ title_old | regex_sub("^(?P<created_year>\d{4})-(?P<created_month>\d{2})-(?P<created_day>\d{2}) (?P<title>.*)$", "\g<created_year>") }}'
+#    created_month: '{{ title_old | regex_sub("^(?P<created_year>\d{4})-(?P<created_month>\d{2})-(?P<created_day>\d{2}) (?P<title>.*)$", "\g<created_month>") }}'
+#    created_day:   '{{ title_old | regex_sub("^(?P<created_year>\d{4})-(?P<created_month>\d{2})-(?P<created_day>\d{2}) (?P<title>.*)$", "\g<created_day>") }}'
+#  validation_rule: '{{ num_documents(correspondent=correspondent, document_type=document_type, created_date_object=created_date_object) == 1 }}'
+
