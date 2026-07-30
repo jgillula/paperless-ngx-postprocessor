@@ -26,7 +26,7 @@ class PaperlessAPI:
         self._auth_token = auth_token
         self._cache = {}
         self._cachable_types = ["correspondents", "document_types", "storage_paths", "tags"]
-        self._paperless_api_version = 3
+        self._paperless_api_version = 10
 
         self._common_headers = {"Authorization": f"Token {self._auth_token}",
                                 "Accept": f"application/json; version={self._paperless_api_version}"}
