@@ -6,6 +6,13 @@ from datetime import date
 from pathlib import Path
 
 class PaperlessAPI:
+    # The API version we've used historically, kept for servers that still support it
+    _legacy_api_version = 3
+    # paperless-ngx 3.0 dropped support for API versions < 9
+    _min_modern_api_version = 9
+    # The newest API version this code has been checked against
+    _max_known_api_version = 10
+
     def __init__(self, api_url, auth_token, paperless_src_dir, logger=None):
         self._logger = logger
         if self._logger is None:
@@ -25,10 +32,29 @@ class PaperlessAPI:
         self._auth_token = auth_token
         self._cache = {}
         self._cachable_types = ["correspondents", "document_types", "storage_paths", "tags"]
-        self._paperless_api_version = 3
+        self._paperless_api_version = self._negotiate_api_version()
+        self._logger.debug(f"Using paperless-ngx API version {self._paperless_api_version}")
 
         self._common_headers = {"Authorization": f"Token {self._auth_token}",
                                 "Accept": f"application/json; version={self._paperless_api_version}"}
+
+    def _negotiate_api_version(self):
+        # Paperless-ngx reports the newest API version it supports in the X-Api-Version header
+        # of authenticated responses. Older versions get dropped over time (e.g. paperless-ngx 3.0
+        # only supports 9 and 10), and requesting an unsupported one fails with 406 Not Acceptable.
+        try:
+            response = requests.get(f"{self._api_url}/tags/?page_size=1",
+                                    headers = {"Authorization": f"Token {self._auth_token}",
+                                               "Accept": "application/json"})
+            server_api_version = int(response.headers["X-Api-Version"])
+        except (requests.RequestException, KeyError, ValueError) as e:
+            self._logger.warning(f"Could not determine the paperless-ngx API version ({e!r}), falling back to version {self._legacy_api_version}")
+            return self._legacy_api_version
+
+        self._logger.debug(f"paperless-ngx supports API versions up to {server_api_version}")
+        if server_api_version < self._min_modern_api_version:
+            return self._legacy_api_version
+        return min(server_api_version, self._max_known_api_version)
 
     def delete_document_by_id(self, document_id):
         item_type = "documents"
@@ -77,6 +103,7 @@ class PaperlessAPI:
                 items.extend(response_json.get("results"))
                 next_url = response_json.get("next")
             else:
+                self._log_request_error(response)
                 next_url = None
             
         if item_type in self._cachable_types:
